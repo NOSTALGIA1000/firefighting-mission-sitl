@@ -121,6 +121,58 @@ class WorldGeneratorTest(unittest.TestCase):
 
         self.assertEqual('0.25', start.find('.//geometry/cylinder/radius').text)
 
+    def test_task_zones_reference_rendered_recognition_materials(self):
+        output = os.path.join(writable_tempdir(), 'textured.world')
+        scenario = generate_world(4501, output)
+        root = ET.parse(output).getroot()
+        names = [node.text for node in root.findall('.//material/script/name')]
+        expected_hazard = 'FireTargets/%s' % scenario.hazard_symbol.title()
+        self.assertIn(expected_hazard, names)
+        self.assertIn('FireTargets/Distractor', names)
+        self.assertIn('FireTargets/Person', names)
+        for model_name in ('hazard_zone_1', 'hazard_zone_2', 'person_zone'):
+            model = root.find(".//model[@name='%s']" % model_name)
+            self.assertEqual(2, len(model.findall('.//visual')))
+
+    def test_seeded_layout_has_one_correct_hazard_and_one_distractor(self):
+        output = os.path.join(writable_tempdir(), 'seeded-zones.world')
+        scenario = generate_world(4501, output)
+        root = ET.parse(output).getroot()
+        hazard_materials = []
+        for index in (1, 2):
+            zone = root.find(".//model[@name='hazard_zone_%d']" % index)
+            hazard_materials.append(zone.find('.//material/script/name').text)
+            self.assertEqual('0.9 0.05 0.05 1',
+                             zone.find('.//visual[@name="border"]/material/ambient').text)
+        self.assertEqual(sorted(['FireTargets/%s' % scenario.hazard_symbol.title(),
+                                 'FireTargets/Distractor']),
+                         sorted(hazard_materials))
+
+        person = root.find(".//model[@name='person_zone']")
+        self.assertEqual('FireTargets/Person',
+                         person.find('.//material/script/name').text)
+        self.assertEqual('0.05 0.75 0.95 1',
+                         person.find('.//visual[@name="border"]/material/ambient').text)
+
+    def test_every_perception_template_is_packaged_for_gazebo(self):
+        labels = ('flammable', 'explosive', 'toxic', 'distractor', 'person')
+        for label in labels:
+            source = os.path.join(PROJECT_ROOT, 'assets', 'templates', label + '.png')
+            texture = os.path.join(PROJECT_ROOT, 'models', 'targets',
+                                   'materials', 'textures', label + '.png')
+            self.assertTrue(os.path.isfile(texture))
+            with open(source, 'rb') as source_file:
+                source_bytes = source_file.read()
+            with open(texture, 'rb') as texture_file:
+                self.assertEqual(source_bytes, texture_file.read())
+
+    def test_sitl_exports_package_models_to_gazebo(self):
+        wrapper = os.path.join(PROJECT_ROOT, 'scripts', 'start_sitl.sh')
+        with open(wrapper, 'r') as handle:
+            text = handle.read()
+        self.assertIn('$package_root/models', text)
+        self.assertIn('GAZEBO_MODEL_PATH', text)
+
 
 if __name__ == '__main__':
     unittest.main()

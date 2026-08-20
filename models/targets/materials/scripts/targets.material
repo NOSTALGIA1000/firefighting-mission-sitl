@@ -1,8 +1,20 @@
-material FireTargets/Hazard
+material FireTargets/Flammable
 {
-  technique { pass { ambient 1 0.65 0 1 diffuse 1 0.65 0 1 } }
+  technique { pass { lighting off texture_unit { texture flammable.png } } }
+}
+material FireTargets/Explosive
+{
+  technique { pass { lighting off texture_unit { texture explosive.png } } }
+}
+material FireTargets/Toxic
+{
+  technique { pass { lighting off texture_unit { texture toxic.png } } }
+}
+material FireTargets/Distractor
+{
+  technique { pass { lighting off texture_unit { texture distractor.png } } }
 }
 material FireTargets/Person
 {
-  technique { pass { ambient 0.1 0.8 0.3 1 diffuse 0.1 0.8 0.3 1 } }
+  technique { pass { lighting off texture_unit { texture person.png } } }
 }

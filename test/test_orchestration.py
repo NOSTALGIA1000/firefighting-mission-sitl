@@ -143,7 +143,7 @@ class OrchestrationTest(unittest.TestCase):
         self.assertIn('Tools/setup_gazebo.bash', wrapper)
         self.assertIn('build/px4_sitl_default', wrapper)
         self.assertIn('GAZEBO_PLUGIN_PATH="${GAZEBO_PLUGIN_PATH:-}"', wrapper)
-        self.assertIn('GAZEBO_MODEL_PATH="${GAZEBO_MODEL_PATH:-}"', wrapper)
+        self.assertIn('GAZEBO_MODEL_PATH="$package_root/models:${GAZEBO_MODEL_PATH:-}"', wrapper)
         self.assertIn('mavros_posix_sitl.launch', wrapper)
 
     def test_completion_waits_for_recorder_ack_and_bag_flush(self):

@@ -87,19 +87,29 @@ def _cylinder_model(name, x, y, radius, length, color):
     )
 
 
-def _zone_model(name, x, y, color, metadata):
+def _zone_model(name, x, y, border_color, material_name, metadata):
     return '''
     <model name="{name}">
       <static>true</static>
       <pose>{x:.4f} {y:.4f} 0.006 0 0 0</pose>
       <link name="link">
-        <visual name="visual">
+        <visual name="border">
           <geometry><box><size>0.4 0.4 0.01</size></box></geometry>
-          <material><ambient>{color}</ambient><diffuse>{color}</diffuse></material>
+          <material><ambient>{border}</ambient><diffuse>{border}</diffuse></material>
+        </visual>
+        <visual name="target_image">
+          <pose>0 0 0.006 0 0 0</pose>
+          <geometry><plane><normal>0 0 1</normal><size>0.34 0.34</size></plane></geometry>
+          <material><script>
+            <uri>model://targets/materials/scripts</uri>
+            <uri>model://targets/materials/textures</uri>
+            <name>{material}</name>
+          </script></material>
         </visual>
       </link>
       <!-- target_class: {metadata} -->
-    </model>'''.format(name=name, x=x, y=y, color=color, metadata=metadata)
+    </model>'''.format(name=name, x=x, y=y, border=border_color,
+                       material=material_name, metadata=metadata)
 
 
 def render_world(scenario):
@@ -118,11 +128,12 @@ def render_world(scenario):
         x, y = HAZARD_POSES[index]
         correct = index == scenario.hazard_index
         metadata = scenario.hazard_symbol if correct else 'distractor'
-        color = '0.95 0.75 0.05 1' if correct else '0.25 0.55 0.95 1'
-        models.append(_zone_model('hazard_zone_%d' % index, x, y, color, metadata))
+        models.append(_zone_model('hazard_zone_%d' % index, x, y,
+                                  '0.9 0.05 0.05 1',
+                                  'FireTargets/%s' % metadata.title(), metadata))
     person_x, person_y = PERSON_POSES[scenario.person_position]
     models.append(_zone_model('person_zone', person_x, person_y,
-                              '0.2 0.8 0.35 1', 'person'))
+                              '0.05 0.75 0.95 1', 'FireTargets/Person', 'person'))
     return '''<?xml version="1.0"?>
 <sdf version="1.6">
   <world name="firefighting_seed_{seed}">

@@ -80,6 +80,6 @@ install(PROGRAMS scripts/run_mission.sh scripts/start_sitl.sh
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
-install(DIRECTORY launch
+install(DIRECTORY launch models assets
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
