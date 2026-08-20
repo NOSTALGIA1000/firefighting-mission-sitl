@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<sdf version="1.6">
+  <model name="payload_test">
+    <link name="base_link">
+      <pose>0 0 0.4 0 0 0</pose>
+      <inertial><mass>10</mass><inertia><ixx>1</ixx><iyy>1</iyy><izz>1</izz></inertia></inertial>
+      <collision name="collision"><geometry><box><size>0.3 0.3 0.1</size></box></geometry></collision>
+      <visual name="visual"><geometry><box><size>0.3 0.3 0.1</size></box></geometry></visual>
+    </link>
+    <joint name="world_anchor" type="fixed"><parent>world</parent><child>base_link</child></joint>
+    <link name="fire_payload_link">
+      <pose>0 -0.08 0.3 0 0 0</pose><gravity>false</gravity>
+      <inertial><mass>0.05</mass><inertia><ixx>0.00003</ixx><iyy>0.00003</iyy><izz>0.00003</izz></inertia></inertial>
+      <collision name="collision"><geometry><box><size>0.06 0.06 0.06</size></box></geometry></collision>
+      <visual name="visual"><geometry><box><size>0.06 0.06 0.06</size></box></geometry><material><ambient>1 0 0 1</ambient></material></visual>
+    </link>
+    <joint name="fire_payload_joint" type="fixed"><parent>base_link</parent><child>fire_payload_link</child></joint>
+    <link name="rescue_payload_link">
+      <pose>0 0.08 0.3 0 0 0</pose><gravity>false</gravity>
+      <inertial><mass>0.05</mass><inertia><ixx>0.00003</ixx><iyy>0.00003</iyy><izz>0.00003</izz></inertia></inertial>
+      <collision name="collision"><geometry><box><size>0.06 0.06 0.06</size></box></geometry></collision>
+      <visual name="visual"><geometry><box><size>0.06 0.06 0.06</size></box></geometry><material><ambient>0 0 1 1</ambient></material></visual>
+    </link>
+    <joint name="rescue_payload_joint" type="fixed"><parent>base_link</parent><child>rescue_payload_link</child></joint>
+    <link name="fire_door_link"><pose>0 -0.08 0.25 0 0 0</pose><inertial><mass>0.01</mass><inertia><ixx>0.000002</ixx><iyy>0.000002</iyy><izz>0.000002</izz></inertia></inertial></link>
+    <joint name="fire_door_joint" type="revolute"><parent>base_link</parent><child>fire_door_link</child><axis><xyz>1 0 0</xyz><limit><lower>0</lower><upper>1.2</upper></limit></axis></joint>
+    <link name="rescue_door_link"><pose>0 0.08 0.25 0 0 0</pose><inertial><mass>0.01</mass><inertia><ixx>0.000002</ixx><iyy>0.000002</iyy><izz>0.000002</izz></inertia></inertial></link>
+    <joint name="rescue_door_joint" type="revolute"><parent>base_link</parent><child>rescue_door_link</child><axis><xyz>1 0 0</xyz><limit><lower>-1.2</lower><upper>0</upper></limit></axis></joint>
+    <plugin name="fire_payload_plugin" filename="libfire_payload_plugin.so"/>
+  </model>
+</sdf>

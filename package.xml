@@ -8,10 +8,13 @@
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>message_generation</build_depend>
   <depend>geometry_msgs</depend>
+  <depend>gazebo_msgs</depend>
   <depend>cv_bridge</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
   <depend>rospy</depend>
+  <depend>roscpp</depend>
+  <depend>gazebo_ros</depend>
   <exec_depend>rospkg</exec_depend>
   <depend>message_runtime</depend>
   <test_depend>rostest</test_depend>

@@ -1,0 +1,11 @@
+<launch>
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="gui" value="false"/>
+    <arg name="paused" value="false"/>
+    <arg name="use_sim_time" value="true"/>
+  </include>
+  <node pkg="gazebo_ros" type="spawn_model" name="spawn_payload_fixture"
+        args="-sdf -file $(find firefighting_mission)/models/payload_test/model.sdf -model payload_test"/>
+  <test test-name="physical_payload_drop" pkg="firefighting_mission"
+        type="payload_drop_ros_test.py" time-limit="35"/>
+</launch>

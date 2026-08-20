@@ -572,6 +572,49 @@
       <accelerometerTurnOnBiasSigma>0.196</accelerometerTurnOnBiasSigma>
     </plugin>
 
+<!-- Dual 60 mm payloads and visible servo doors -->
+    <link name="fire_payload_link">
+      <pose>0 -0.065 -0.12 0 0 0</pose>
+      <gravity>false</gravity>
+      <inertial><mass>0.05</mass><inertia><ixx>0.00003</ixx><iyy>0.00003</iyy><izz>0.00003</izz></inertia></inertial>
+      <collision name="collision"><geometry><box><size>0.06 0.06 0.06</size></box></geometry></collision>
+      <visual name="visual"><geometry><box><size>0.06 0.06 0.06</size></box></geometry><material><ambient>0.9 0.05 0.05 1</ambient><diffuse>0.9 0.05 0.05 1</diffuse></material></visual>
+    </link>
+    <joint name="fire_payload_joint" type="fixed">
+      <parent>base_link</parent><child>fire_payload_link</child>
+    </joint>
+    <link name="rescue_payload_link">
+      <pose>0 0.065 -0.12 0 0 0</pose>
+      <gravity>false</gravity>
+      <inertial><mass>0.05</mass><inertia><ixx>0.00003</ixx><iyy>0.00003</iyy><izz>0.00003</izz></inertia></inertial>
+      <collision name="collision"><geometry><box><size>0.06 0.06 0.06</size></box></geometry></collision>
+      <visual name="visual"><geometry><box><size>0.06 0.06 0.06</size></box></geometry><material><ambient>0.05 0.2 0.95 1</ambient><diffuse>0.05 0.2 0.95 1</diffuse></material></visual>
+    </link>
+    <joint name="rescue_payload_joint" type="fixed">
+      <parent>base_link</parent><child>rescue_payload_link</child>
+    </joint>
+    <link name="fire_door_link">
+      <pose>0 -0.065 -0.155 0 0 0</pose>
+      <inertial><mass>0.01</mass><inertia><ixx>0.000002</ixx><iyy>0.000002</iyy><izz>0.000002</izz></inertia></inertial>
+      <collision name="collision"><geometry><box><size>0.075 0.07 0.006</size></box></geometry></collision>
+      <visual name="visual"><geometry><box><size>0.075 0.07 0.006</size></box></geometry><material><ambient>0.25 0.25 0.25 1</ambient><diffuse>0.25 0.25 0.25 1</diffuse></material></visual>
+    </link>
+    <joint name="fire_door_joint" type="revolute">
+      <pose>0 -0.035 0 0 0 0</pose><parent>base_link</parent><child>fire_door_link</child>
+      <axis><xyz>1 0 0</xyz><limit><lower>0</lower><upper>1.2</upper><effort>2</effort><velocity>2</velocity></limit></axis>
+    </joint>
+    <link name="rescue_door_link">
+      <pose>0 0.065 -0.155 0 0 0</pose>
+      <inertial><mass>0.01</mass><inertia><ixx>0.000002</ixx><iyy>0.000002</iyy><izz>0.000002</izz></inertia></inertial>
+      <collision name="collision"><geometry><box><size>0.075 0.07 0.006</size></box></geometry></collision>
+      <visual name="visual"><geometry><box><size>0.075 0.07 0.006</size></box></geometry><material><ambient>0.25 0.25 0.25 1</ambient><diffuse>0.25 0.25 0.25 1</diffuse></material></visual>
+    </link>
+    <joint name="rescue_door_joint" type="revolute">
+      <pose>0 0.035 0 0 0 0</pose><parent>base_link</parent><child>rescue_door_link</child>
+      <axis><xyz>1 0 0</xyz><limit><lower>-1.2</lower><upper>0</upper><effort>2</effort><velocity>2</velocity></limit></axis>
+    </joint>
+    <plugin name="fire_payload_plugin" filename="libfire_payload_plugin.so"/>
+
 <!-- For Hokuyo Lidar Payload -->
     <include>
         <uri>model://hokuyo_lidar</uri>
@@ -622,6 +665,5 @@
   </model>
 </sdf>
 <!-- vim: set noet fenc=utf-8 ff=unix sts=0 sw=4 ts=4 : -->
-
 
 
