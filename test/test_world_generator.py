@@ -44,6 +44,12 @@ class WorldGeneratorTest(unittest.TestCase):
                 self.assertGreaterEqual(
                     physical_side_clearance(x, 0.10, FIELD_BOUNDS), 1.30)
 
+    def test_physical_side_clearance_uses_outer_surface_and_wider_side(self):
+        self.assertEqual(2.55, physical_side_clearance(0.70, 0.10))
+        custom_bounds = (-2.0, 4.0, -3.0, 3.0, 2.0)
+        self.assertEqual(3.25, physical_side_clearance(0.50, 0.25,
+                                                        custom_bounds))
+
     def test_fixed_obstacles_touch_the_required_edges(self):
         obstacle_1 = FIXED_OBSTACLES[0]
         obstacle_3 = FIXED_OBSTACLES[2]
