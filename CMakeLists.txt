@@ -2,7 +2,10 @@ cmake_minimum_required(VERSION 3.0.2)
 project(firefighting_mission)
 
 find_package(catkin REQUIRED COMPONENTS
+  cv_bridge
+  gazebo_msgs
   geometry_msgs
+  mavros_msgs
   message_generation
   roscpp
   rospy
@@ -26,6 +29,9 @@ catkin_package(
   LIBRARIES fire_payload_plugin
   CATKIN_DEPENDS
   geometry_msgs
+  gazebo_msgs
+  mavros_msgs
+  cv_bridge
   message_runtime
   roscpp
   rospy
@@ -50,6 +56,7 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_nosetests(test/test_perception.py)
   catkin_add_nosetests(test/test_payload.py)
   catkin_add_nosetests(test/test_safety.py)
+  catkin_add_nosetests(test/test_scoring.py)
   catkin_add_nosetests(test/test_state_machine.py)
   catkin_add_nosetests(test/test_world_generator.py)
   add_rostest(test/navigation.test)
@@ -62,5 +69,15 @@ catkin_install_python(PROGRAMS
   scripts/safety_monitor_node.py
   scripts/target_detector_node.py
   scripts/payload_controller_node.py
+  scripts/mission_manager_node.py
+  scripts/mission_recorder_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+install(PROGRAMS scripts/run_mission.sh
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+install(DIRECTORY launch
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )

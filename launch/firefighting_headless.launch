@@ -1,0 +1,11 @@
+<launch>
+  <arg name="seed" default="4501"/>
+  <arg name="record" default="true"/>
+  <arg name="output_dir" default="$(find firefighting_mission)/artifacts/$(arg seed)"/>
+  <include file="$(find firefighting_mission)/launch/firefighting.launch">
+    <arg name="seed" value="$(arg seed)"/>
+    <arg name="record" value="$(arg record)"/>
+    <arg name="gui" value="false"/>
+    <arg name="output_dir" value="$(arg output_dir)"/>
+  </include>
+</launch>
