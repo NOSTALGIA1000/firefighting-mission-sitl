@@ -34,7 +34,7 @@ FIXED_OBSTACLES = (
 
 def physical_side_clearance(x, radius, bounds=FIELD_BOUNDS):
     left, right = bounds[0], bounds[1]
-    return round(max((x - radius) - left, right - (x + radius)), 10)
+    return max((x - radius) - left, right - (x + radius))
 
 
 def build_scenario(seed):
