@@ -8,7 +8,8 @@ from mavros_msgs.msg import State
 from std_msgs.msg import Bool, String, UInt8
 
 from firefighting_mission.msg import DropResult, MissionEvent, TargetDetection
-from firefighting_mission.orchestration import validated_alignment
+from firefighting_mission.orchestration import (completion_should_shutdown,
+                                                 validated_alignment)
 from firefighting_mission.state_machine import Inputs, MissionStateMachine
 
 
@@ -42,6 +43,8 @@ class MissionManagerNode(object):
         self.last_phase = None
         self.last_drop_phase = None
         self.completion_timer = None
+        self.completion_deadline = None
+        self.recorder_finalized = False
         self.phase_pub = rospy.Publisher('/fire_mission/phase', String,
                                          queue_size=1, latch=True)
         self.goal_pub = rospy.Publisher('/fire_mission/goal', PoseStamped,
@@ -62,6 +65,8 @@ class MissionManagerNode(object):
         rospy.Subscriber('/fire_mission/detection', TargetDetection,
                          self._detection)
         rospy.Subscriber('/fire_mission/drop_result', DropResult, self._drop)
+        rospy.Subscriber('/fire_mission/recorder_finalized', Bool,
+                         self._recorder_finalized)
         rospy.Subscriber('/gazebo/model_states', ModelStates, self._models)
         self.timer = rospy.Timer(rospy.Duration(0.10), self._tick)
 
@@ -82,6 +87,9 @@ class MissionManagerNode(object):
 
     def _drop(self, message):
         self.drop_result = message
+
+    def _recorder_finalized(self, message):
+        self.recorder_finalized = bool(message.data)
 
     def _models(self, message):
         self.model_states = message
@@ -146,7 +154,12 @@ class MissionManagerNode(object):
             self.command_pub.publish(commands[phase])
 
     def _shutdown_after_completion(self, _event):
-        rospy.signal_shutdown('mission complete')
+        if self.completion_deadline is None:
+            return
+        now = rospy.Time.now().to_sec()
+        if completion_should_shutdown(self.recorder_finalized, now,
+                                      self.completion_deadline):
+            rospy.signal_shutdown('mission complete')
 
     def _tick(self, _event):
         inputs = self._inputs()
@@ -161,9 +174,11 @@ class MissionManagerNode(object):
             self._command_for_phase(command.phase)
             self._event('phase_changed', command.reason)
             if command.phase == 'COMPLETE' and self.completion_timer is None:
+                timeout = float(rospy.get_param('~recorder_finalize_timeout',
+                                                15.0))
+                self.completion_deadline = (rospy.Time.now().to_sec() + timeout)
                 self.completion_timer = rospy.Timer(
-                    rospy.Duration(1.0), self._shutdown_after_completion,
-                    oneshot=True)
+                    rospy.Duration(0.10), self._shutdown_after_completion)
         if command.drop_channel and command.phase != self.last_drop_phase:
             self.last_drop_phase = command.phase
             self.drop_pub.publish(command.drop_channel)

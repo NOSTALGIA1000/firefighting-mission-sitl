@@ -1,20 +1,15 @@
 #!/usr/bin/env python
 from __future__ import division, print_function
 
-import math
-
 import rospy
-from geometry_msgs.msg import PoseStamped, Twist
+from geometry_msgs.msg import Twist
+from mavros_msgs.msg import PositionTarget
 from mavros_msgs.srv import CommandBool, SetMode
 from std_msgs.msg import String
 
-from firefighting_mission.mavros_bridge import command_actions, flu_to_enu
-
-
-def quaternion_yaw(orientation):
-    siny = 2.0 * (orientation.w * orientation.z + orientation.x * orientation.y)
-    cosy = 1.0 - 2.0 * (orientation.y * orientation.y + orientation.z * orientation.z)
-    return math.atan2(siny, cosy)
+from firefighting_mission.mavros_bridge import (arm_actions, command_actions,
+                                                 raw_velocity_setpoint,
+                                                 RAW_SETPOINT_RATE_HZ)
 
 
 class MavrosBridgeNode(object):
@@ -22,35 +17,59 @@ class MavrosBridgeNode(object):
 
     def __init__(self):
         self.prefix = rospy.get_param('~mavros_prefix', '/iris_0/mavros').rstrip('/')
-        self.pose = None
-        self.velocity = Twist()
+        self.target = self._raw_target(0.0, 0.0, 0.0, 0.0)
+        self.setpoint_count = 0
+        self.arm_requested = False
+        self.offboard_sent = False
+        self.arm_sent = False
         self.velocity_pub = rospy.Publisher(
-            self.prefix + '/setpoint_velocity/cmd_vel_unstamped', Twist,
+            self.prefix + '/setpoint_raw/local', PositionTarget,
             queue_size=1)
         self.arm = rospy.ServiceProxy(self.prefix + '/cmd/arming', CommandBool)
         self.set_mode = rospy.ServiceProxy(self.prefix + '/set_mode', SetMode)
         rospy.Subscriber('/xtdrone/iris_0/cmd', String, self._command)
         rospy.Subscriber('/xtdrone/iris_0/cmd_vel_flu', Twist, self._velocity)
-        rospy.Subscriber(self.prefix + '/local_position/pose', PoseStamped,
-                         self._pose)
-        self.timer = rospy.Timer(rospy.Duration(0.05), self._publish_velocity)
+        self.timer = rospy.Timer(rospy.Duration(1.0 / RAW_SETPOINT_RATE_HZ),
+                                 self._publish_velocity)
 
-    def _pose(self, message):
-        self.pose = message
+    @staticmethod
+    def _raw_target(forward, left, upward, yaw_rate):
+        frame, mask, forward, left, upward, yaw_rate = raw_velocity_setpoint(
+            forward, left, upward, yaw_rate)
+        target = PositionTarget()
+        target.coordinate_frame = frame
+        target.type_mask = mask
+        target.velocity.x = forward
+        target.velocity.y = left
+        target.velocity.z = upward
+        target.yaw_rate = yaw_rate
+        return target
 
     def _velocity(self, message):
-        self.velocity = message
+        self.target = self._raw_target(message.linear.x, message.linear.y,
+                                       message.linear.z, message.angular.z)
 
     def _publish_velocity(self, _event):
-        output = Twist()
-        yaw = quaternion_yaw(self.pose.pose.orientation) if self.pose else 0.0
-        output.linear.x, output.linear.y = flu_to_enu(
-            self.velocity.linear.x, self.velocity.linear.y, yaw)
-        output.linear.z = self.velocity.linear.z
-        output.angular.z = self.velocity.angular.z
-        self.velocity_pub.publish(output)
+        self.velocity_pub.publish(self.target)
+        self.setpoint_count += 1
+        if not self.arm_requested:
+            return
+
+        for action in arm_actions(self.setpoint_count, self.offboard_sent):
+            try:
+                if action == 'OFFBOARD':
+                    response = self.set_mode(0, action)
+                    self.offboard_sent = bool(response.mode_sent)
+                elif action == 'ARM' and not self.arm_sent:
+                    response = self.arm(True)
+                    self.arm_sent = bool(response.success)
+            except rospy.ServiceException as error:
+                rospy.logwarn('MAVROS %s request failed: %s', action, error)
 
     def _command(self, message):
+        if message.data.strip().upper() == 'ARM':
+            self.arm_requested = True
+            return
         for action in command_actions(message.data):
             try:
                 if action == 'ARM':

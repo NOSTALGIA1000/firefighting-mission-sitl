@@ -4,22 +4,28 @@ from __future__ import division, print_function
 import csv
 import math
 import os
+import signal
 import subprocess
+import time
 
 import cv2
 import rospy
 from cv_bridge import CvBridge, CvBridgeError
-from gazebo_msgs.msg import ContactsState, LinkStates, ModelStates
+from gazebo_msgs.msg import ContactsState, LinkStates
 from geometry_msgs.msg import PoseStamped
 from mavros_msgs.msg import State
 from sensor_msgs.msg import Image, LaserScan
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 
 from firefighting_mission.msg import DropResult, MissionEvent, TargetDetection
 from firefighting_mission.orchestration import (contacts_indicate_collision,
-                                                 payload_link_names)
+                                                 payload_link_position,
+                                                 recording_topics)
 from firefighting_mission.scoring import Score, write_score
 from firefighting_mission.world_generator import HAZARD_POSES, PERSON_POSES, build_scenario
+
+
+BAG_FLUSH_TIMEOUT_SECONDS = 5.0
 
 
 class MissionRecorderNode(object):
@@ -42,16 +48,18 @@ class MissionRecorderNode(object):
         self.hazard_identified = False
         self.person_identified = False
         self.drop_results = {}
-        self.model_positions = {}
         self.link_positions = {}
         self.collision = False
         self.writer = None
         self.bridge = CvBridge()
         self.finalized = False
+        self.scan_topic = rospy.get_param('~scan_topic', '/scan')
         self.event_file = open(os.path.join(self.output_dir, 'events.log'), 'a')
         self.trajectory_file = open(os.path.join(self.output_dir, 'trajectory.csv'), 'w')
         self.trajectory = csv.writer(self.trajectory_file)
         self.trajectory.writerow(('elapsed_seconds', 'x', 'y', 'z', 'phase'))
+        self.finalized_pub = rospy.Publisher('/fire_mission/recorder_finalized',
+                                             Bool, queue_size=1, latch=True)
         self.bag_process = self._start_bag() if self.record else None
         rospy.Subscriber('/fire_mission/phase', String, self._phase)
         rospy.Subscriber('/fire_mission/event', MissionEvent, self._event)
@@ -61,19 +69,14 @@ class MissionRecorderNode(object):
         rospy.Subscriber(self.mavros_prefix + '/local_position/pose', PoseStamped,
                          self._pose)
         rospy.Subscriber(self.mavros_prefix + '/state', State, self._state)
-        rospy.Subscriber(rospy.get_param('~scan_topic', '/scan'), LaserScan,
-                         self._scan)
-        rospy.Subscriber('/gazebo/model_states', ModelStates, self._models)
+        rospy.Subscriber(self.scan_topic, LaserScan, self._scan)
         rospy.Subscriber('/gazebo/link_states', LinkStates, self._links)
         rospy.Subscriber('/fire_mission/contacts', ContactsState, self._contacts)
         rospy.on_shutdown(self._shutdown)
 
     def _start_bag(self):
         path = os.path.join(self.output_dir, 'mission.bag')
-        topics = ['/fire_mission/phase', '/fire_mission/event',
-                  '/fire_mission/detection', '/fire_mission/drop_result',
-                  '/fire_mission/annotated', '/iris_0/mavros/local_position/pose',
-                  '/iris_0/mavros/state', '/scan', '/gazebo/model_states']
+        topics = recording_topics(self.mavros_prefix, self.scan_topic)
         try:
             return subprocess.Popen(['rosbag', 'record', '-O', path] + topics)
         except OSError as error:
@@ -120,10 +123,6 @@ class MissionRecorderNode(object):
         if valid:
             self.minimum_clearance = min(self.minimum_clearance, min(valid))
 
-    def _models(self, message):
-        self.model_positions = dict((name, pose.position)
-                                    for name, pose in zip(message.name, message.pose))
-
     def _links(self, message):
         self.link_positions = dict((name, pose.position)
                                    for name, pose in zip(message.name, message.pose))
@@ -150,8 +149,7 @@ class MissionRecorderNode(object):
         result = self.drop_results.get(channel)
         point = result.landing_position if result else None
         if point is None or (point.x == 0.0 and point.y == 0.0 and point.z == 0.0):
-            point = next((self.link_positions[name] for name in payload_link_names(channel)
-                          if name in self.link_positions), None)
+            point = payload_link_position(self.link_positions, channel)
         if point is None:
             return float('inf')
         return math.hypot(point.x - target[0], point.y - target[1])
@@ -180,12 +178,25 @@ class MissionRecorderNode(object):
         if self.finalized:
             return
         self.finalized = True
-        write_score(self._score(), os.path.join(self.output_dir, 'score.json'))
         self.event_file.close()
         self.trajectory_file.close()
         if self.writer is not None:
             self.writer.release()
         if self.bag_process is not None:
+            self._stop_bag()
+        write_score(self._score(), os.path.join(self.output_dir, 'score.json'))
+        self.finalized_pub.publish(Bool(data=True))
+
+    def _stop_bag(self):
+        if self.bag_process.poll() is not None:
+            return
+        self.bag_process.send_signal(signal.SIGINT)
+        deadline = time.time() + BAG_FLUSH_TIMEOUT_SECONDS
+        while self.bag_process.poll() is None and time.time() < deadline:
+            time.sleep(0.1)
+        if self.bag_process.poll() is None:
+            rospy.logwarn('rosbag did not flush in %.1f seconds; terminating',
+                          BAG_FLUSH_TIMEOUT_SECONDS)
             self.bag_process.terminate()
 
     def _shutdown(self):
