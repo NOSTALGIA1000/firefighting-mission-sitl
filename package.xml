@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>firefighting_mission</name>
+  <version>0.1.0</version>
+  <description>Autonomous firefighting mission for PX4/XTDrone SITL.</description>
+  <maintainer email="codex@example.com">Codex</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>message_generation</build_depend>
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>rospy</depend>
+  <depend>message_runtime</depend>
+  <export/>
+</package>
