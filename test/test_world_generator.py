@@ -22,6 +22,11 @@ def writable_tempdir():
     return root
 
 
+def numbers(text):
+    values = tuple(float(value) for value in text.split())
+    return values[:3] if len(values) == 6 else values
+
+
 class WorldGeneratorTest(unittest.TestCase):
     def test_metric_layout_matches_figure_one(self):
         self.assertEqual((-0.65, 3.35, -3.35, 0.65, 3.0), FIELD_BOUNDS)
@@ -112,6 +117,31 @@ class WorldGeneratorTest(unittest.TestCase):
 
         hazard_size = models['hazard_zone_1'].find('.//geometry/box/size').text
         self.assertEqual('0.4 0.4 0.01', hazard_size)
+
+    def test_field_has_four_three_metre_physical_safety_nets(self):
+        output = os.path.join(writable_tempdir(), 'enclosed.world')
+        generate_world(4501, output)
+        root = ET.parse(output).getroot()
+        expected = {
+            'safety_net_north': ((1.35, 0.65, 1.50), (4.00, 0.02, 3.00)),
+            'safety_net_south': ((1.35, -3.35, 1.50), (4.00, 0.02, 3.00)),
+            'safety_net_west': ((-0.65, -1.35, 1.50), (0.02, 4.00, 3.00)),
+            'safety_net_east': ((3.35, -1.35, 1.50), (0.02, 4.00, 3.00)),
+        }
+        for name, (pose, size) in expected.items():
+            model = root.find(".//model[@name='%s']" % name)
+            self.assertIsNotNone(model)
+            self.assertEqual(pose, numbers(model.find('pose').text))
+            self.assertEqual(size, numbers(model.find('.//collision/geometry/box/size').text))
+            self.assertGreaterEqual(float(model.find('.//visual/transparency').text), 0.70)
+
+    def test_payload_cubes_remain_within_eighty_millimetres(self):
+        sdf = os.path.join(PROJECT_ROOT, 'models', 'fire_iris', 'fire_iris.sdf')
+        root = ET.parse(sdf).getroot()
+        for link_name in ('fire_payload_link', 'rescue_payload_link'):
+            link = root.find(".//link[@name='%s']" % link_name)
+            size = numbers(link.find('.//collision/geometry/box/size').text)
+            self.assertLessEqual(max(size), 0.08)
 
     def test_start_zone_is_five_hundred_millimeters_diameter(self):
         output = os.path.join(writable_tempdir(), 'scene.world')

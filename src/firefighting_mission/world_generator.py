@@ -112,8 +112,34 @@ def _zone_model(name, x, y, border_color, material_name, metadata):
                        material=material_name, metadata=metadata)
 
 
+def _safety_net_model(name, x, y, size):
+    return '''
+    <model name="{name}">
+      <static>true</static>
+      <pose>{x:.4f} {y:.4f} 1.5000 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>{size}</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>{size}</size></box></geometry>
+          <material><ambient>0.25 0.45 0.70 0.20</ambient><diffuse>0.25 0.45 0.70 0.20</diffuse></material>
+          <transparency>0.80</transparency>
+        </visual>
+      </link>
+    </model>'''.format(name=name, x=x, y=y, size=size)
+
+
 def render_world(scenario):
     models = []
+    models.append(_safety_net_model('safety_net_north', 1.35, 0.65,
+                                    '4.0 0.02 3.0'))
+    models.append(_safety_net_model('safety_net_south', 1.35, -3.35,
+                                    '4.0 0.02 3.0'))
+    models.append(_safety_net_model('safety_net_west', -0.65, -1.35,
+                                    '0.02 4.0 3.0'))
+    models.append(_safety_net_model('safety_net_east', 3.35, -1.35,
+                                    '0.02 4.0 3.0'))
     models.append(_cylinder_model('start_zone', 0.0, 0.0, 0.25, 0.01,
                                   '0.1 0.7 0.9 1'))
     for name, x, y, yaw, length, width in FIXED_OBSTACLES:
