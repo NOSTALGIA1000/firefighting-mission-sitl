@@ -9,7 +9,10 @@ import xml.etree.ElementTree as ET
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, 'src'))
 
-from firefighting_mission.world_generator import build_scenario, generate_world
+from firefighting_mission.world_generator import (
+    CYLINDER_POSES, FIELD_BOUNDS, FIXED_OBSTACLES,
+    HAZARD_POSES, PERSON_POSES, build_scenario, generate_world,
+    physical_side_clearance)
 
 
 def writable_tempdir():
@@ -20,6 +23,35 @@ def writable_tempdir():
 
 
 class WorldGeneratorTest(unittest.TestCase):
+    def test_metric_layout_matches_figure_one(self):
+        self.assertEqual((-0.65, 3.35, -3.35, 0.65, 3.0), FIELD_BOUNDS)
+        expected = (
+            ('fixed_obstacle_1', 0.70, -0.20, 0.0, 0.10, 1.70),
+            ('fixed_obstacle_2', 2.72, 0.04, 0.785398, 1.60, 0.10),
+            ('fixed_obstacle_3', 0.70, -3.10, 0.0, 0.10, 0.50),
+            ('fixed_obstacle_4', 2.10, -3.10, 0.0, 0.10, 0.50),
+        )
+        self.assertEqual(expected, FIXED_OBSTACLES)
+        self.assertEqual({1: ((0.70, -1.45), (2.10, -1.45)),
+                          2: ((0.70, -2.45), (2.10, -1.95))}, CYLINDER_POSES)
+        self.assertEqual({1: (1.40, 0.00), 2: (1.40, -0.45)}, HAZARD_POSES)
+        self.assertEqual({1: (2.70, -1.10), 2: (2.70, -1.90),
+                          3: (2.70, -2.65)}, PERSON_POSES)
+
+    def test_each_random_cylinder_has_a_1300mm_side_passage(self):
+        for candidates in CYLINDER_POSES.values():
+            for x, _y in candidates:
+                self.assertGreaterEqual(
+                    physical_side_clearance(x, 0.10, FIELD_BOUNDS), 1.30)
+
+    def test_fixed_obstacles_touch_the_required_edges(self):
+        obstacle_1 = FIXED_OBSTACLES[0]
+        obstacle_3 = FIXED_OBSTACLES[2]
+        obstacle_4 = FIXED_OBSTACLES[3]
+        self.assertAlmostEqual(0.65, obstacle_1[2] + obstacle_1[5] / 2.0)
+        self.assertAlmostEqual(-3.35, obstacle_3[2] - obstacle_3[5] / 2.0)
+        self.assertAlmostEqual(-3.35, obstacle_4[2] - obstacle_4[5] / 2.0)
+
     def test_seed_is_reproducible(self):
         root = writable_tempdir()
         first_path = os.path.join(root, 'first.world')

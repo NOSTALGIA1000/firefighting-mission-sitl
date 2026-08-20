@@ -9,33 +9,40 @@ Scenario = namedtuple(
     'seed bounds cylinder_positions hazard_index hazard_symbol person_position'
 )
 
+FIELD_BOUNDS = (-0.65, 3.35, -3.35, 0.65, 3.0)
 
 CYLINDER_POSES = {
-    1: ((0.65, -1.45), (2.05, -1.45)),
-    2: ((0.65, -2.05), (2.05, -2.05)),
+    1: ((0.70, -1.45), (2.10, -1.45)),
+    2: ((0.70, -2.45), (2.10, -1.95)),
 }
 PERSON_POSES = {
-    1: (2.65, -0.85),
-    2: (2.65, -1.65),
-    3: (2.65, -2.45),
+    1: (2.70, -1.10),
+    2: (2.70, -1.90),
+    3: (2.70, -2.65),
 }
 HAZARD_POSES = {
-    1: (1.25, 0.15),
-    2: (1.25, -0.35),
+    1: (1.40, 0.00),
+    2: (1.40, -0.45),
 }
 FIXED_OBSTACLES = (
-    ('fixed_obstacle_1', 0.65, -0.20, 0.0, 0.10, 1.70),
-    ('fixed_obstacle_2', 2.05, -0.15, 0.785398, 1.60, 0.10),
-    ('fixed_obstacle_3', 0.65, -2.85, 0.0, 0.10, 0.50),
-    ('fixed_obstacle_4', 2.05, -2.85, 0.0, 0.10, 0.50),
+    ('fixed_obstacle_1', 0.70, -0.20, 0.0, 0.10, 1.70),
+    ('fixed_obstacle_2', 2.72, 0.04, 0.785398, 1.60, 0.10),
+    ('fixed_obstacle_3', 0.70, -3.10, 0.0, 0.10, 0.50),
+    ('fixed_obstacle_4', 2.10, -3.10, 0.0, 0.10, 0.50),
 )
+
+
+def physical_side_clearance(x, radius, bounds=FIELD_BOUNDS):
+    left, right = bounds[0], bounds[1]
+    return max((x - radius) - left, right - (x + radius))
 
 
 def build_scenario(seed):
     rng = random.Random(int(seed))
     return Scenario(
         seed=int(seed),
-        bounds=(4.0, 4.0, 3.0),
+        bounds=(FIELD_BOUNDS[1] - FIELD_BOUNDS[0],
+                FIELD_BOUNDS[3] - FIELD_BOUNDS[2], FIELD_BOUNDS[4]),
         cylinder_positions=(rng.choice((1, 2)), rng.choice((1, 2))),
         hazard_index=rng.choice((1, 2)),
         hazard_symbol=rng.choice(('flammable', 'explosive', 'toxic')),
