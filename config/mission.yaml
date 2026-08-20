@@ -1,0 +1,13 @@
+navigation:
+  max_xy: 0.55
+  max_z: 0.30
+  target_altitude: 1.30
+  slow_distance: 0.70
+  detour_distance: 0.45
+  retreat_distance: 0.30
+safety:
+  stale_hover_seconds: 0.50
+  stale_land_seconds: 2.00
+  maximum_attitude_degrees: 30.0
+  maximum_altitude: 2.50
+  minimum_boundary_margin: 0.20

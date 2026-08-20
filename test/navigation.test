@@ -1,0 +1,9 @@
+<launch>
+  <node pkg="firefighting_mission" type="navigator_node.py"
+        name="navigator_under_test" output="screen">
+    <param name="scan_topic" value="/scan"/>
+  </node>
+  <test test-name="navigation_ros_contract"
+        pkg="firefighting_mission" type="navigation_ros_test.py"
+        time-limit="20"/>
+</launch>

@@ -28,11 +28,18 @@ catkin_package(CATKIN_DEPENDS
 )
 
 if(CATKIN_ENABLE_TESTING)
+  find_package(rostest REQUIRED)
   catkin_add_nosetests(test/test_package_metadata.py)
+  catkin_add_nosetests(test/test_navigation.py)
+  catkin_add_nosetests(test/test_safety.py)
   catkin_add_nosetests(test/test_state_machine.py)
   catkin_add_nosetests(test/test_world_generator.py)
+  add_rostest(test/navigation.test)
 endif()
 
-catkin_install_python(PROGRAMS scripts/generate_world.py
+catkin_install_python(PROGRAMS
+  scripts/generate_world.py
+  scripts/navigator_node.py
+  scripts/safety_monitor_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
