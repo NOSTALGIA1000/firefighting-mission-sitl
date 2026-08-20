@@ -1,0 +1,12 @@
+required_seeds: [4501, 4502, 4503, 4504]
+field:
+  size: [4.0, 4.0, 3.0]
+  start_diameter: 0.5
+random_obstacles:
+  count: 2
+  diameter: 0.2
+  height: 2.0
+task_zones:
+  size: [0.4, 0.4]
+  hazard_candidates: 2
+  person_candidates: 3

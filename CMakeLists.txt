@@ -30,4 +30,9 @@ catkin_package(CATKIN_DEPENDS
 if(CATKIN_ENABLE_TESTING)
   catkin_add_nosetests(test/test_package_metadata.py)
   catkin_add_nosetests(test/test_state_machine.py)
+  catkin_add_nosetests(test/test_world_generator.py)
 endif()
+
+catkin_install_python(PROGRAMS scripts/generate_world.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
