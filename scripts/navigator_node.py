@@ -20,6 +20,8 @@ def quaternion_yaw(orientation):
 
 class NavigatorNode(object):
     def __init__(self):
+        self.mavros_prefix = rospy.get_param('~mavros_prefix',
+                                              '/iris_0/mavros').rstrip('/')
         self.navigator = Navigator(NavigationConfig(
             max_xy=rospy.get_param('~max_xy', 0.55),
             max_z=rospy.get_param('~max_z', 0.30),
@@ -32,7 +34,8 @@ class NavigatorNode(object):
         self.status_pub = rospy.Publisher(
             '/fire_mission/nav_status', String, queue_size=1, latch=True)
         rospy.Subscriber('/fire_mission/goal', PoseStamped, self._goal)
-        rospy.Subscriber('/iris_0/mavros/local_position/pose', PoseStamped, self._pose)
+        rospy.Subscriber(self.mavros_prefix + '/local_position/pose', PoseStamped,
+                         self._pose)
         rospy.Subscriber(rospy.get_param('~scan_topic', '/scan'), LaserScan, self._scan)
         self.timer = rospy.Timer(rospy.Duration(0.05), self._tick)
 

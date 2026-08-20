@@ -9,19 +9,23 @@ import subprocess
 import cv2
 import rospy
 from cv_bridge import CvBridge, CvBridgeError
-from gazebo_msgs.msg import ModelStates
+from gazebo_msgs.msg import ContactsState, LinkStates, ModelStates
 from geometry_msgs.msg import PoseStamped
 from mavros_msgs.msg import State
 from sensor_msgs.msg import Image, LaserScan
-from std_msgs.msg import Bool, String
+from std_msgs.msg import String
 
 from firefighting_mission.msg import DropResult, MissionEvent, TargetDetection
+from firefighting_mission.orchestration import (contacts_indicate_collision,
+                                                 payload_link_names)
 from firefighting_mission.scoring import Score, write_score
 from firefighting_mission.world_generator import HAZARD_POSES, PERSON_POSES, build_scenario
 
 
 class MissionRecorderNode(object):
     def __init__(self):
+        self.mavros_prefix = rospy.get_param('~mavros_prefix',
+                                              '/iris_0/mavros').rstrip('/')
         self.seed = int(rospy.get_param('~seed', 4501))
         self.record = bool(rospy.get_param('~record', True))
         package_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -39,6 +43,7 @@ class MissionRecorderNode(object):
         self.person_identified = False
         self.drop_results = {}
         self.model_positions = {}
+        self.link_positions = {}
         self.collision = False
         self.writer = None
         self.bridge = CvBridge()
@@ -53,11 +58,14 @@ class MissionRecorderNode(object):
         rospy.Subscriber('/fire_mission/detection', TargetDetection, self._detection)
         rospy.Subscriber('/fire_mission/drop_result', DropResult, self._drop)
         rospy.Subscriber('/fire_mission/annotated', Image, self._image, queue_size=1)
-        rospy.Subscriber('/iris_0/mavros/local_position/pose', PoseStamped, self._pose)
-        rospy.Subscriber('/iris_0/mavros/state', State, self._state)
-        rospy.Subscriber('/scan', LaserScan, self._scan)
+        rospy.Subscriber(self.mavros_prefix + '/local_position/pose', PoseStamped,
+                         self._pose)
+        rospy.Subscriber(self.mavros_prefix + '/state', State, self._state)
+        rospy.Subscriber(rospy.get_param('~scan_topic', '/scan'), LaserScan,
+                         self._scan)
         rospy.Subscriber('/gazebo/model_states', ModelStates, self._models)
-        rospy.Subscriber('/fire_mission/collision', Bool, self._collision)
+        rospy.Subscriber('/gazebo/link_states', LinkStates, self._links)
+        rospy.Subscriber('/fire_mission/contacts', ContactsState, self._contacts)
         rospy.on_shutdown(self._shutdown)
 
     def _start_bag(self):
@@ -116,8 +124,12 @@ class MissionRecorderNode(object):
         self.model_positions = dict((name, pose.position)
                                     for name, pose in zip(message.name, message.pose))
 
-    def _collision(self, message):
-        self.collision = self.collision or message.data
+    def _links(self, message):
+        self.link_positions = dict((name, pose.position)
+                                   for name, pose in zip(message.name, message.pose))
+
+    def _contacts(self, message):
+        self.collision = self.collision or contacts_indicate_collision(message.states)
 
     def _image(self, message):
         if not self.record:
@@ -138,10 +150,8 @@ class MissionRecorderNode(object):
         result = self.drop_results.get(channel)
         point = result.landing_position if result else None
         if point is None or (point.x == 0.0 and point.y == 0.0 and point.z == 0.0):
-            names = ('fire_payload', 'fire_payload_model') if channel == 1 else (
-                'rescue_payload', 'rescue_payload_model')
-            point = next((self.model_positions[name] for name in names
-                          if name in self.model_positions), None)
+            point = next((self.link_positions[name] for name in payload_link_names(channel)
+                          if name in self.link_positions), None)
         if point is None:
             return float('inf')
         return math.hypot(point.x - target[0], point.y - target[1])

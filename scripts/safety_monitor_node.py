@@ -22,6 +22,8 @@ def quaternion_roll_pitch(orientation):
 
 class SafetyMonitorNode(object):
     def __init__(self):
+        self.mavros_prefix = rospy.get_param('~mavros_prefix',
+                                              '/iris_0/mavros').rstrip('/')
         self.monitor = SafetyMonitor()
         self.pose = None
         self.pose_stamp = rospy.Time(0)
@@ -31,7 +33,8 @@ class SafetyMonitorNode(object):
                                           queue_size=1, latch=True)
         self.override_pub = rospy.Publisher('/fire_mission/safety_override', Twist,
                                             queue_size=1)
-        rospy.Subscriber('/iris_0/mavros/local_position/pose', PoseStamped, self._pose)
+        rospy.Subscriber(self.mavros_prefix + '/local_position/pose', PoseStamped,
+                         self._pose)
         rospy.Subscriber(rospy.get_param('~scan_topic', '/scan'), LaserScan, self._scan)
         self.timer = rospy.Timer(rospy.Duration(0.1), self._tick)
 

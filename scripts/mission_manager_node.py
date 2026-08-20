@@ -5,13 +5,15 @@ import rospy
 from gazebo_msgs.msg import ModelStates
 from geometry_msgs.msg import PoseStamped
 from mavros_msgs.msg import State
-from std_msgs.msg import String, UInt8
+from std_msgs.msg import Bool, String, UInt8
 
 from firefighting_mission.msg import DropResult, MissionEvent, TargetDetection
+from firefighting_mission.orchestration import validated_alignment
 from firefighting_mission.state_machine import Inputs, MissionStateMachine
 
 
 GOALS = {
+    'ARM': (0.0, 0.0, 1.30),
     'TAKEOFF': (0.0, 0.0, 1.30),
     'SEARCH_HAZARD': (1.25, -0.10, 1.30),
     'ALIGN_HAZARD': (1.25, -0.10, 1.30),
@@ -27,6 +29,8 @@ GOALS = {
 
 class MissionManagerNode(object):
     def __init__(self):
+        self.mavros_prefix = rospy.get_param('~mavros_prefix',
+                                              '/iris_0/mavros').rstrip('/')
         self.machine = MissionStateMachine(rospy.Time.now().to_sec())
         self.pose = None
         self.state = State()
@@ -37,19 +41,22 @@ class MissionManagerNode(object):
         self.model_states = None
         self.last_phase = None
         self.last_drop_phase = None
+        self.completion_timer = None
         self.phase_pub = rospy.Publisher('/fire_mission/phase', String,
                                          queue_size=1, latch=True)
         self.goal_pub = rospy.Publisher('/fire_mission/goal', PoseStamped,
                                         queue_size=1, latch=True)
         self.drop_pub = rospy.Publisher('/fire_mission/drop_request', UInt8,
                                         queue_size=1)
+        self.aligned_pub = rospy.Publisher('/fire_mission/aligned', Bool,
+                                           queue_size=1, latch=True)
         self.command_pub = rospy.Publisher('/xtdrone/iris_0/cmd', String,
                                            queue_size=1)
         self.event_pub = rospy.Publisher('/fire_mission/event', MissionEvent,
                                          queue_size=10, latch=True)
-        rospy.Subscriber('/iris_0/mavros/local_position/pose', PoseStamped,
+        rospy.Subscriber(self.mavros_prefix + '/local_position/pose', PoseStamped,
                          self._pose)
-        rospy.Subscriber('/iris_0/mavros/state', State, self._state)
+        rospy.Subscriber(self.mavros_prefix + '/state', State, self._state)
         rospy.Subscriber('/fire_mission/nav_status', String, self._nav)
         rospy.Subscriber('/fire_mission/safety_status', String, self._safety)
         rospy.Subscriber('/fire_mission/detection', TargetDetection,
@@ -98,7 +105,9 @@ class MissionManagerNode(object):
             goal_reached=self.nav_status == 'REACHED',
             detection_class=target_class,
             detection_confirmed=self.detection.confirmed,
-            aligned=self.detection.confirmed and self.nav_status == 'REACHED',
+            aligned=validated_alignment(self.machine.phase,
+                                        self.detection.confirmed,
+                                        self.nav_status),
             drop_channel=self.drop_result.channel if drop_matches else 0,
             drop_succeeded=bool(drop_matches),
             home_reached=self.nav_status == 'REACHED',
@@ -136,16 +145,25 @@ class MissionManagerNode(object):
         if phase in commands:
             self.command_pub.publish(commands[phase])
 
+    def _shutdown_after_completion(self, _event):
+        rospy.signal_shutdown('mission complete')
+
     def _tick(self, _event):
-        command = self.machine.tick(rospy.Time.now().to_sec(), self._inputs())
+        inputs = self._inputs()
+        command = self.machine.tick(rospy.Time.now().to_sec(), inputs)
+        aligned = validated_alignment(command.phase, self.detection.confirmed,
+                                      self.nav_status)
+        self.aligned_pub.publish(aligned)
         if command.phase != self.last_phase:
             self.last_phase = command.phase
             self.phase_pub.publish(command.phase)
             self._publish_goal(command.phase)
             self._command_for_phase(command.phase)
             self._event('phase_changed', command.reason)
-            if command.phase == 'COMPLETE':
-                rospy.signal_shutdown('mission complete')
+            if command.phase == 'COMPLETE' and self.completion_timer is None:
+                self.completion_timer = rospy.Timer(
+                    rospy.Duration(1.0), self._shutdown_after_completion,
+                    oneshot=True)
         if command.drop_channel and command.phase != self.last_drop_phase:
             self.last_drop_phase = command.phase
             self.drop_pub.publish(command.drop_channel)

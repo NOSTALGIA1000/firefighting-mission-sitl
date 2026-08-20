@@ -13,6 +13,8 @@ from firefighting_mission.payload import PayloadController
 
 class PayloadControllerNode(object):
     def __init__(self):
+        self.mavros_prefix = rospy.get_param('~mavros_prefix',
+                                              '/iris_0/mavros').rstrip('/')
         self.controller = PayloadController()
         self.pose = None
         self.velocity = None
@@ -25,8 +27,9 @@ class PayloadControllerNode(object):
                                           queue_size=1, latch=True)
         rospy.Subscriber('/fire_mission/drop_request', UInt8, self._request)
         rospy.Subscriber('/fire_mission/aligned', Bool, self._aligned)
-        rospy.Subscriber('/iris_0/mavros/local_position/pose', PoseStamped, self._pose)
-        rospy.Subscriber('/iris_0/mavros/local_position/velocity_local',
+        rospy.Subscriber(self.mavros_prefix + '/local_position/pose', PoseStamped,
+                         self._pose)
+        rospy.Subscriber(self.mavros_prefix + '/local_position/velocity_local',
                          TwistStamped, self._velocity)
 
     def _pose(self, message):
