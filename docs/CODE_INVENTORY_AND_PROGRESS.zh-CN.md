@@ -165,11 +165,11 @@
 
 - 完整自主任务飞行尚未最终通过。此前排查到 PX4/MAVROS 能连接并进入 OFFBOARD，但机体物理起飞行为仍需继续调试。
 - 当前阶段重点已切换为：先完成并人工确认 Gazebo 场地环境。
-- GitHub 上传尚未完成，因为本地 GitHub CLI 令牌失效，且当前终端代理配置会阻断 GitHub API 请求。
+- GitHub 上传已完成，仓库为 `https://github.com/NOSTALGIA1000/firefighting-mission-sitl`，当前分支为 `feature/firefighting-sitl`。
 
-## GitHub 发布建议
+## GitHub 发布状态
 
-建议将当前分支 `feature/firefighting-sitl` 推送到 GitHub，并保留当前提交历史。当前提交清楚区分了：
+当前分支 `feature/firefighting-sitl` 已推送到 GitHub，并保留当前提交历史。当前提交清楚区分了：
 
 - SITL 任务框架。
 - 任务编排与记录。
@@ -177,10 +177,10 @@
 - 场地贴图和目标区。
 - 安全网与载荷尺寸约束。
 
-如需创建新仓库，建议仓库名：
+仓库名：
 
 `firefighting-mission-sitl`
 
-如推送到已有仓库，建议远程分支：
+远程分支：
 
 `feature/firefighting-sitl`

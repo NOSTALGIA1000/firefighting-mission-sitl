@@ -2,6 +2,13 @@
 
 本包为 PX4、XTDrone、ROS Melodic 与 Gazebo 9 的自主低空消防救援仿真。任务自动完成起飞、危险品识别和红框标注、消防物资投放、人员识别和蓝框标注、救援物资投放、返航、降落与停桨。
 
+## 接手说明
+
+小组成员第一次接手时，先阅读：
+
+- `docs/TEAM_HANDOFF.zh-CN.md`：运行环境、接手步骤、当前可用能力和待办事项。
+- `docs/CODE_INVENTORY_AND_PROGRESS.zh-CN.md`：完整代码清单、模块用途、验证记录和当前进展。
+
 ## 一键运行
 
 在已完成 catkin 编译、并已 source 工作空间与 XTDrone/PX4 环境的 Ubuntu 18.04 虚拟机中运行：
