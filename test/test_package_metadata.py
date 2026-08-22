@@ -50,7 +50,7 @@ class PackageMetadataTest(unittest.TestCase):
         with open(attributes_path, 'r') as handle:
             attributes = handle.read()
 
-        self.assertRegex(attributes, r'scripts/\*\s+text\s+eol=lf')
+        self.assertTrue(re.search(r'scripts/\*\s+text\s+eol=lf', attributes))
 
 
 if __name__ == '__main__':

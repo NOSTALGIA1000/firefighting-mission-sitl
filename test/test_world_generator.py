@@ -151,6 +151,15 @@ class WorldGeneratorTest(unittest.TestCase):
 
         self.assertEqual('0.25', start.find('.//geometry/cylinder/radius').text)
 
+    def test_start_zone_is_visual_only_so_it_cannot_tip_the_iris(self):
+        output = os.path.join(writable_tempdir(), 'visual-start-zone.world')
+        generate_world(4502, output)
+        root = ET.parse(output).getroot()
+        start = root.find(".//model[@name='start_zone']")
+
+        self.assertIsNone(start.find('.//collision'))
+        self.assertIsNotNone(start.find('.//visual/geometry/cylinder'))
+
     def test_task_zones_reference_rendered_recognition_materials(self):
         output = os.path.join(writable_tempdir(), 'textured.world')
         scenario = generate_world(4501, output)

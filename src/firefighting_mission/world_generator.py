@@ -69,13 +69,17 @@ def _box_model(name, x, y, z, yaw, size, color, static=True):
     )
 
 
-def _cylinder_model(name, x, y, radius, length, color):
+def _cylinder_model(name, x, y, radius, length, color, collision=True):
+    collision_xml = ''
+    if collision:
+        collision_xml = '''
+        <collision name="collision"><geometry><cylinder><radius>{radius}</radius><length>{length}</length></cylinder></geometry></collision>'''.format(
+            radius=radius, length=length)
     return '''
     <model name="{name}">
       <static>true</static>
       <pose>{x:.4f} {y:.4f} {z:.4f} 0 0 0</pose>
-      <link name="link">
-        <collision name="collision"><geometry><cylinder><radius>{radius}</radius><length>{length}</length></cylinder></geometry></collision>
+      <link name="link">{collision}
         <visual name="visual">
           <geometry><cylinder><radius>{radius}</radius><length>{length}</length></cylinder></geometry>
           <material><ambient>{color}</ambient><diffuse>{color}</diffuse></material>
@@ -83,7 +87,7 @@ def _cylinder_model(name, x, y, radius, length, color):
       </link>
     </model>'''.format(
         name=name, x=x, y=y, z=length / 2.0, radius=radius,
-        length=length, color=color,
+        length=length, color=color, collision=collision_xml,
     )
 
 
@@ -141,7 +145,7 @@ def render_world(scenario):
     models.append(_safety_net_model('safety_net_east', 3.35, -1.35,
                                     '0.02 4.0 3.0'))
     models.append(_cylinder_model('start_zone', 0.0, 0.0, 0.25, 0.01,
-                                  '0.1 0.7 0.9 1'))
+                                  '0.1 0.7 0.9 1', collision=False))
     for name, x, y, yaw, length, width in FIXED_OBSTACLES:
         models.append(_box_model(name, x, y, 1.0, yaw,
                                  '%.2f %.2f 2.0' % (length, width),
