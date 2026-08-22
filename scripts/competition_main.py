@@ -3,6 +3,7 @@ from __future__ import division, print_function
 
 import rospy
 from geometry_msgs.msg import PoseStamped
+from sensor_msgs.msg import Imu
 from mavros_msgs.msg import State
 from mavros_msgs.srv import CommandBool, SetMode
 from std_msgs.msg import String
@@ -21,6 +22,7 @@ class CompetitionMainNode(object):
         )
         self.state = State()
         self.pose = None
+        self.imu = None
         self.setpoint_pub = rospy.Publisher(
             self.mavros_prefix + '/setpoint_position/local',
             PoseStamped, queue_size=10)
@@ -33,6 +35,7 @@ class CompetitionMainNode(object):
         rospy.Subscriber(self.mavros_prefix + '/state', State, self._state)
         rospy.Subscriber(self.mavros_prefix + '/local_position/pose',
                          PoseStamped, self._pose)
+        rospy.Subscriber(self.mavros_prefix + '/imu/data', Imu, self._imu)
         self.timer = rospy.Timer(rospy.Duration(0.05), self._tick)
 
     def _state(self, message):
@@ -40,6 +43,9 @@ class CompetitionMainNode(object):
 
     def _pose(self, message):
         self.pose = message
+
+    def _imu(self, message):
+        self.imu = message
 
     def _altitude(self):
         if self.pose is None:
@@ -63,6 +69,7 @@ class CompetitionMainNode(object):
             armed=self.state.armed,
             mode=self.state.mode,
             altitude=self._altitude(),
+            sensor_ready=self.imu is not None,
             local_pose_available=self.pose is not None,
         )
         self.phase_pub.publish(outputs.state)
