@@ -21,6 +21,14 @@ class PackageMetadataTest(unittest.TestCase):
         self.assertLess(cmake.index('catkin_python_setup()'),
                         cmake.index('generate_messages('))
 
+    def test_competition_main_is_installed_and_tested(self):
+        with open(os.path.join(PROJECT_ROOT, 'CMakeLists.txt'), 'r') as handle:
+            cmake = handle.read()
+
+        self.assertIn('scripts/competition_main.py', cmake)
+        self.assertIn('catkin_add_nosetests(test/test_competition_main.py)',
+                      cmake)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -54,6 +54,7 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_nosetests(test/test_package_metadata.py)
   catkin_add_nosetests(test/test_navigation.py)
   catkin_add_nosetests(test/test_orchestration.py)
+  catkin_add_nosetests(test/test_competition_main.py)
   catkin_add_nosetests(test/test_perception.py)
   catkin_add_nosetests(test/test_payload.py)
   catkin_add_nosetests(test/test_safety.py)
@@ -73,6 +74,7 @@ catkin_install_python(PROGRAMS
   scripts/mission_manager_node.py
   scripts/mission_recorder_node.py
   scripts/mavros_bridge_node.py
+  scripts/competition_main.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

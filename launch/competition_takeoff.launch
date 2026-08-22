@@ -1,0 +1,18 @@
+<launch>
+  <arg name="seed" default="4501"/>
+  <arg name="gui" default="true"/>
+  <arg name="world" default="$(find firefighting_mission)/artifacts/$(arg seed)/firefighting.world"/>
+  <arg name="mavros_prefix" default="/mavros"/>
+  <arg name="takeoff_altitude" default="1.2"/>
+
+  <param name="/use_sim_time" value="true"/>
+
+  <node pkg="firefighting_mission" type="start_sitl.sh" name="firefighting_sitl"
+        args="$(arg seed) $(arg world) $(arg gui)" output="screen" required="true"/>
+
+  <node pkg="firefighting_mission" type="competition_main.py" name="competition_main"
+        output="screen" required="true">
+    <param name="mavros_prefix" value="$(arg mavros_prefix)"/>
+    <param name="takeoff_altitude" value="$(arg takeoff_altitude)"/>
+  </node>
+</launch>
