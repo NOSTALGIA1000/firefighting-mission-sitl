@@ -27,6 +27,18 @@ class CompetitionMainTest(unittest.TestCase):
         self.assertEqual([], outputs.mode_requests)
         self.assertFalse(outputs.arm_request)
 
+    def test_waits_for_local_pose_before_prestreaming_offboard_setpoints(self):
+        controller = CompetitionMain(takeoff_altitude=1.2, prestream_count=3)
+
+        outputs = controller.tick(0.0, connected=True, armed=False,
+                                  mode='', altitude=0.0,
+                                  local_pose_available=False)
+
+        self.assertEqual('WAIT_LOCAL_POSE', outputs.state)
+        self.assertEqual([], outputs.setpoints)
+        self.assertEqual([], outputs.mode_requests)
+        self.assertFalse(outputs.arm_request)
+
     def test_prestreams_position_setpoints_before_offboard_and_arm(self):
         controller = CompetitionMain(takeoff_altitude=1.2, prestream_count=3)
 

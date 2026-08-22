@@ -45,9 +45,14 @@ class CompetitionMain(object):
             bool(arm_request),
         )
 
-    def tick(self, now, connected, armed, mode, altitude):
+    def tick(self, now, connected, armed, mode, altitude,
+             local_pose_available=True):
         if not connected:
             self.state = 'WAIT_FCU'
+            return ControllerOutputs(self.state, [], [], False)
+
+        if not local_pose_available:
+            self.state = 'WAIT_LOCAL_POSE'
             return ControllerOutputs(self.state, [], [], False)
 
         if mode != 'OFFBOARD':

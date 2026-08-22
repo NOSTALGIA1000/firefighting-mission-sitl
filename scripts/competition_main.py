@@ -63,6 +63,7 @@ class CompetitionMainNode(object):
             armed=self.state.armed,
             mode=self.state.mode,
             altitude=self._altitude(),
+            local_pose_available=self.pose is not None,
         )
         self.phase_pub.publish(outputs.state)
         for point in outputs.setpoints:
