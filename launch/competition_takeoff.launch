@@ -3,13 +3,14 @@
   <arg name="gui" default="true"/>
   <arg name="world" default="$(find firefighting_mission)/artifacts/$(arg seed)/firefighting.world"/>
   <arg name="sdf" default="$(optenv PX4_FIRMWARE_DIR /home/ss/PX4_Firmware)/Tools/sitl_gazebo/models/iris/iris.sdf"/>
+  <arg name="spawn_z" default="0.2"/>
   <arg name="mavros_prefix" default="/mavros"/>
   <arg name="takeoff_altitude" default="1.2"/>
 
   <param name="/use_sim_time" value="true"/>
 
   <node pkg="firefighting_mission" type="start_sitl.sh" name="firefighting_sitl"
-        args="$(arg seed) $(arg world) $(arg gui) $(arg sdf)" output="screen" required="true"/>
+        args="$(arg seed) $(arg world) $(arg gui) $(arg sdf) $(arg spawn_z)" output="screen" required="true"/>
 
   <node pkg="firefighting_mission" type="competition_main.py" name="competition_main"
         output="screen" required="true">

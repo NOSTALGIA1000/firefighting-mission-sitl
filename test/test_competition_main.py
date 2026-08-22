@@ -148,6 +148,17 @@ class CompetitionMainTest(unittest.TestCase):
         self.assertIn('Tools/sitl_gazebo/models/iris/iris.sdf',
                       sdf_arg.attrib.get('default'))
 
+    def test_takeoff_launch_spawns_iris_above_field_floor_for_imu_startup(self):
+        root = ET.parse(os.path.join(PROJECT_ROOT, 'launch',
+                                     'competition_takeoff.launch')).getroot()
+        spawn_z_arg = next(arg for arg in root.findall('arg')
+                           if arg.attrib.get('name') == 'spawn_z')
+        sitl = next(node for node in root.findall('node')
+                    if node.attrib.get('type') == 'start_sitl.sh')
+
+        self.assertEqual('0.2', spawn_z_arg.attrib.get('default'))
+        self.assertIn('$(arg spawn_z)', sitl.attrib.get('args'))
+
 
 if __name__ == '__main__':
     unittest.main()

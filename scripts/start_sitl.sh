@@ -6,6 +6,7 @@ world="$2"
 gui="$3"
 package_root="$(rospack find firefighting_mission)"
 sdf="${4:-$package_root/models/fire_iris/fire_iris.sdf}"
+spawn_z="${5:-0.2}"
 px4_root="${PX4_FIRMWARE_DIR:-/home/ss/PX4_Firmware}"
 export ROS_PACKAGE_PATH="$px4_root:$px4_root/Tools/sitl_gazebo:${ROS_PACKAGE_PATH:-}"
 export GAZEBO_PLUGIN_PATH="${GAZEBO_PLUGIN_PATH:-}"
@@ -16,4 +17,4 @@ source "$px4_root/Tools/setup_gazebo.bash" "$px4_root" \
 
 python "$package_root/scripts/generate_world.py" --seed "$seed" --output "$world"
 exec roslaunch "$px4_root/launch/mavros_posix_sitl.launch" vehicle:=iris "world:=$world" \
-  "sdf:=$sdf" "gui:=$gui" interactive:=false
+  "sdf:=$sdf" "gui:=$gui" "z:=$spawn_z" interactive:=false

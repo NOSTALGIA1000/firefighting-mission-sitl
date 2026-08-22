@@ -147,6 +147,8 @@ class OrchestrationTest(unittest.TestCase):
         self.assertIn('mavros_posix_sitl.launch', wrapper)
         self.assertIn('sdf="${4:-$package_root/models/fire_iris/fire_iris.sdf}"',
                       wrapper)
+        self.assertIn('spawn_z="${5:-0.2}"', wrapper)
+        self.assertIn('"z:=$spawn_z"', wrapper)
 
     def test_completion_waits_for_recorder_ack_and_bag_flush(self):
         with open(os.path.join(PROJECT_ROOT, 'scripts',
