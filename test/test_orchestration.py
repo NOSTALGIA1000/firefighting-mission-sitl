@@ -145,6 +145,8 @@ class OrchestrationTest(unittest.TestCase):
         self.assertIn('GAZEBO_PLUGIN_PATH="${GAZEBO_PLUGIN_PATH:-}"', wrapper)
         self.assertIn('GAZEBO_MODEL_PATH="$package_root/models:${GAZEBO_MODEL_PATH:-}"', wrapper)
         self.assertIn('mavros_posix_sitl.launch', wrapper)
+        self.assertIn('sdf="${4:-$package_root/models/fire_iris/fire_iris.sdf}"',
+                      wrapper)
 
     def test_completion_waits_for_recorder_ack_and_bag_flush(self):
         with open(os.path.join(PROJECT_ROOT, 'scripts',

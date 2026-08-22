@@ -113,6 +113,18 @@ class CompetitionMainTest(unittest.TestCase):
                            if node.attrib.get('type') == 'competition_main.py')
         self.assertEqual('true', competition.attrib.get('required'))
 
+    def test_takeoff_launch_uses_px4_native_iris_sdf_for_flight_smoke(self):
+        root = ET.parse(os.path.join(PROJECT_ROOT, 'launch',
+                                     'competition_takeoff.launch')).getroot()
+        sitl = next(node for node in root.findall('node')
+                    if node.attrib.get('type') == 'start_sitl.sh')
+
+        self.assertIn('$(arg sdf)', sitl.attrib.get('args'))
+        sdf_arg = next(arg for arg in root.findall('arg')
+                       if arg.attrib.get('name') == 'sdf')
+        self.assertIn('Tools/sitl_gazebo/models/iris/iris.sdf',
+                      sdf_arg.attrib.get('default'))
+
 
 if __name__ == '__main__':
     unittest.main()
