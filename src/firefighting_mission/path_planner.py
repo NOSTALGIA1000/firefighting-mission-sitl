@@ -3,7 +3,9 @@ from __future__ import division, print_function
 import math
 from collections import namedtuple
 
-from firefighting_mission.field_map import plan_route, point_is_free
+from firefighting_mission.field_map import (plan_route,
+                                            point_is_free,
+                                            point_matches_known_static)
 
 
 PlanCommand = namedtuple(
@@ -17,7 +19,9 @@ class VisualPlannerConfig(object):
                  aircraft_radius=0.20, external_clearance=0.25,
                  pass_distance=0.55, waypoint_tolerance=0.12,
                  observation_frames=3, side_hysteresis=0.15,
-                 yaw_alignment_tolerance=0.35):
+                 yaw_alignment_tolerance=0.35, lateral_trigger=0.55,
+                 sensor_forward_offset=0.0,
+                 known_static_tolerance=0.18):
         self.altitude = float(altitude)
         self.altitude_tolerance = float(altitude_tolerance)
         self.trigger_range = float(trigger_range)
@@ -29,6 +33,9 @@ class VisualPlannerConfig(object):
         self.observation_frames = int(observation_frames)
         self.side_hysteresis = float(side_hysteresis)
         self.yaw_alignment_tolerance = float(yaw_alignment_tolerance)
+        self.lateral_trigger = float(lateral_trigger)
+        self.sensor_forward_offset = float(sensor_forward_offset)
+        self.known_static_tolerance = float(known_static_tolerance)
 
 
 def angle_difference(first, second):
@@ -155,9 +162,22 @@ class VisualPathPlanner(object):
             self.interrupted_state = self.state
         return self._command('HOLD_UNSAFE', pose[:2], pose[3], reason)
 
-    def _nearest_obstacle(self, obstacles):
-        candidates = [value for value in obstacles
-                      if value.forward_m > 0.0 and abs(value.left_m) <= 0.80]
+    def _nearest_obstacle(self, pose, obstacles):
+        candidates = []
+        for value in obstacles:
+            shifted = value._replace(
+                forward_m=(value.forward_m +
+                           self.config.sensor_forward_offset),
+                nearest_range_m=(value.nearest_range_m +
+                                 self.config.sensor_forward_offset))
+            surface = _body_to_world(pose, shifted.forward_m,
+                                     shifted.left_m)
+            if point_matches_known_static(
+                    surface, self.config.known_static_tolerance):
+                continue
+            if (shifted.forward_m > 0.0 and
+                    abs(shifted.left_m) <= self.config.lateral_trigger):
+                candidates.append(shifted)
         if not candidates:
             return None
         return min(candidates, key=lambda value: value.nearest_range_m)
@@ -243,7 +263,7 @@ class VisualPathPlanner(object):
             self.state = self.interrupted_state
             self.interrupted_state = None
 
-        nearest = self._nearest_obstacle(obstacles)
+        nearest = self._nearest_obstacle(pose, obstacles)
         if self.state == 'FOLLOW_ROUTE':
             route_command = self._follow_route(pose)
             if route_command.state == 'REACHED':

@@ -1,0 +1,31 @@
+<launch>
+  <arg name="seed" default="1"/>
+  <arg name="world" default="/tmp/fire_visual_avoidance_$(arg seed).world"/>
+
+  <param name="/use_sim_time" value="true"/>
+  <node pkg="firefighting_mission" type="start_sitl.sh" name="firefighting_sitl"
+        args="$(arg seed) $(arg world) false $(find firefighting_mission)/models/fire_iris/fire_iris.sdf 0.2"
+        output="screen" required="true"/>
+  <node pkg="firefighting_mission" type="competition_main.py"
+        name="competition_main" output="screen" required="true">
+    <param name="mavros_prefix" value="/mavros"/>
+    <param name="takeoff_altitude" value="1.2"/>
+  </node>
+  <node pkg="firefighting_mission" type="stereo_obstacle_node.py"
+        name="stereo_obstacle_adapter" output="screen">
+    <param name="input_mode" value="depth"/>
+    <param name="fallback_fx" value="190.0"/>
+    <param name="fallback_cx" value="159.5"/>
+    <param name="stale_seconds" value="0.75"/>
+  </node>
+  <node pkg="firefighting_mission" type="path_planner.py"
+        name="path_planner" output="screen">
+    <param name="mavros_prefix" value="/mavros"/>
+    <param name="transit_altitude" value="1.2"/>
+  </node>
+
+  <test test-name="visual_avoidance_smoke" pkg="firefighting_mission"
+        type="visual_avoidance_smoke.py" time-limit="120">
+    <param name="seed" value="$(arg seed)"/>
+  </test>
+</launch>

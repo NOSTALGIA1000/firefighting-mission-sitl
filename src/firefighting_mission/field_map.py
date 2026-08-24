@@ -34,6 +34,30 @@ def point_is_free(point, inflation=0.45):
                    for obstacle in FIXED_OBSTACLES)
 
 
+def point_matches_known_static(point, tolerance=0.18):
+    """Return whether a measured surface belongs to mapped wall or field net."""
+    x_value, y_value = point
+    tolerance = float(tolerance)
+    if (abs(x_value - FIELD_BOUNDS[0]) <= tolerance or
+            abs(x_value - FIELD_BOUNDS[1]) <= tolerance or
+            abs(y_value - FIELD_BOUNDS[2]) <= tolerance or
+            abs(y_value - FIELD_BOUNDS[3]) <= tolerance):
+        return True
+    for obstacle in FIXED_OBSTACLES:
+        _, center_x, center_y, yaw, length, width = obstacle
+        dx = x_value - center_x
+        dy = y_value - center_y
+        cosine = math.cos(yaw)
+        sine = math.sin(yaw)
+        local_length = cosine * dx + sine * dy
+        local_width = -sine * dx + cosine * dy
+        outside_length = max(0.0, abs(local_length) - length / 2.0)
+        outside_width = max(0.0, abs(local_width) - width / 2.0)
+        if math.hypot(outside_length, outside_width) <= tolerance:
+            return True
+    return False
+
+
 def simplify_route(points):
     if len(points) < 3:
         return tuple(points)

@@ -1,16 +1,17 @@
 # 消防救援 SITL 任务
 
-本包为 PX4、XTDrone、ROS Melodic 与 Gazebo 9 的自主低空消防救援仿真。任务自动完成起飞、危险品识别和红框标注、消防物资投放、人员识别和蓝框标注、救援物资投放、返航、降落与停桨。
+本包为 PX4、XTDrone、ROS Melodic 与 Gazebo 9 的自主低空消防救援仿真。场地、起飞悬停、识别、投放、规划、记录等模块已实现；完整比赛流程尚未通过无碰撞整链路验证。
 
 ## 接手说明
 
 小组成员第一次接手时，先阅读：
 
+- `docs/CURRENT_HANDOFF.zh-CN.md`：当前真实状态、P0 问题和下一步，必须先读。
 - `docs/TEAM_HANDOFF.zh-CN.md`：运行环境、接手步骤、当前可用能力和待办事项。
-- `docs/TEAM_C_HANDOFF.zh-CN.md`：固定高度路径规划、双通道投放接口与演示命令。
+- `docs/TEAM_C_HANDOFF.zh-CN.md`：1.2m 双目视觉绕桩、固定地图规划和双通道投放接口。
 - `docs/CODE_INVENTORY_AND_PROGRESS.zh-CN.md`：完整代码清单、模块用途、验证记录和当前进展。
 
-## 一键运行
+## 启动调试链路
 
 在已完成 catkin 编译、并已 source 工作空间与 XTDrone/PX4 环境的 Ubuntu 18.04 虚拟机中运行：
 
@@ -26,7 +27,7 @@ rosrun firefighting_mission run_mission.sh 4501
 
 `seed` 决定两个圆柱、正确危险品与人员位置；相同种子可重复生成相同场景。桌面模式使用 `firefighting.launch`，无界面模式使用 `firefighting_headless.launch`。
 
-任务完成后，`artifacts/<seed>/` 包含：
+任务链正常结束后，`artifacts/<seed>/` 应包含：
 
 - `score.json`：机器可读成绩与失败原因；写入使用临时文件再原子替换。
 - `events.log`：阶段转换与投放事件。
@@ -39,6 +40,7 @@ rosrun firefighting_mission run_mission.sh 4501
 
 ## 常见问题
 
+- 当前随机圆柱绕桩实飞仍有碰撞失败；先按当前交接文档复现并修复，不要直接做完整比赛演示。
 - 未连接 PX4、未获得初始位姿或安全状态不为 `CLEAR` 时，任务不会解锁。
 - 无视频、bag 或分数文件时，确认 `record:=true`，并检查 Gazebo、MAVROS 与下视相机话题是否可用。
 - 本包不修改 PX4_Firmware 或 XTDrone。替换为 450 机体时，只需保持现有 MAVROS、速度命令、雷达、相机和双投放话题契约。

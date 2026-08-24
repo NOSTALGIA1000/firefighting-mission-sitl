@@ -26,7 +26,9 @@ class PathPlannerNode(object):
         self.planner = VisualPathPlanner(VisualPlannerConfig(
             altitude=rospy.get_param('~transit_altitude', 1.20),
             minimum_corridor=rospy.get_param('~minimum_corridor', 0.90),
-            trigger_range=rospy.get_param('~trigger_range', 1.00)))
+            trigger_range=rospy.get_param('~trigger_range', 1.00),
+            sensor_forward_offset=rospy.get_param(
+                '~sensor_forward_offset', 0.32)))
         self.pose = None
         self.requested_goal = None
         self.active_goal = None

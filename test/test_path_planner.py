@@ -1,5 +1,6 @@
 from __future__ import division, print_function
 
+import math
 import os
 import sys
 import unittest
@@ -22,6 +23,8 @@ def straight_route(start, goal):
 
 
 def planner_with_goal(config=None):
+    config = config or VisualPlannerConfig()
+    config.known_static_tolerance = -1.0
     planner = VisualPathPlanner(
         config=config, route_provider=straight_route,
         path_validator=lambda start, side, passing, rejoin: True)
@@ -58,6 +61,40 @@ class VisualPathPlannerTest(unittest.TestCase):
 
         self.assertEqual(('BRAKE', 'OBSERVE', 'OBSERVE', 'OBSERVE',
                           'SELECT_SIDE'), tuple(states))
+
+    def test_obstacle_outside_flight_corridor_does_not_trigger(self):
+        planner = planner_with_goal()
+        side_obstacle = OBSTACLE._replace(left_m=0.70)
+
+        command = planner.update(POSE, (side_obstacle,), True, 1.0)
+
+        self.assertEqual('FOLLOW_ROUTE', command.state)
+
+    def test_known_safety_net_seen_by_forward_camera_is_not_replanned(self):
+        pose = (0.20, -1.90, 1.20, math.pi)
+        safety_net = ObstacleClusterData(
+            0.55, 0.0, 0.53, 0.20, -0.20, 1.0)
+        planner = VisualPathPlanner(
+            VisualPlannerConfig(sensor_forward_offset=0.32),
+            route_provider=straight_route)
+        planner.set_goal((-0.40, -1.90, 1.20), pose)
+
+        command = planner.update(pose, (safety_net,), True, 1.0)
+
+        self.assertEqual('FOLLOW_ROUTE', command.state)
+
+    def test_unknown_cylinder_still_triggers_after_camera_offset_transform(self):
+        pose = (0.0, -1.45, 1.20, 0.0)
+        cylinder = ObstacleClusterData(
+            0.30, 0.0, 0.28, 0.10, -0.10, 1.0)
+        planner = VisualPathPlanner(
+            VisualPlannerConfig(sensor_forward_offset=0.32),
+            route_provider=straight_route)
+        planner.set_goal((1.50, -1.45, 1.20), pose)
+
+        command = planner.update(pose, (cylinder,), True, 1.0)
+
+        self.assertEqual('BRAKE', command.state)
 
     def test_selects_only_valid_right_corridor(self):
         planner = planner_with_goal(VisualPlannerConfig(minimum_corridor=0.90))
@@ -180,7 +217,9 @@ class VisualPathPlannerTest(unittest.TestCase):
         self.assertAlmostEqual(-0.06, output[3], places=6)
 
     def test_fixed_wall_blocks_side_selection_that_would_cross_it(self):
-        planner = VisualPathPlanner(route_provider=straight_route)
+        planner = VisualPathPlanner(
+            VisualPlannerConfig(known_static_tolerance=-1.0),
+            route_provider=straight_route)
         planner.set_goal((2.0, 0.0, 1.2), POSE)
         planner.clearance_override = (1.30, 1.30)
         drive_to_select(planner)

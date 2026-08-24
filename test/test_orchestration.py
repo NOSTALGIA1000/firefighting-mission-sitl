@@ -214,6 +214,22 @@ class OrchestrationTest(unittest.TestCase):
         self.assertNotIn('fcu_url:=tcp://localhost:4560', wrapper)
         self.assertNotIn('respawn_mavros:=true', wrapper)
 
+    def test_active_avoidance_has_no_random_cylinder_truth_input(self):
+        paths = (
+            'scripts/path_planner.py',
+            'scripts/stereo_obstacle_node.py',
+            'src/firefighting_mission/path_planner.py',
+            'launch/firefighting.launch',
+        )
+        contents = []
+        for path in paths:
+            with open(os.path.join(PROJECT_ROOT, path), 'r') as handle:
+                contents.append(handle.read())
+        active = '\n'.join(contents)
+
+        self.assertNotIn('CYLINDER_POSES', active)
+        self.assertNotIn('/gazebo/model_states', active)
+
 
 if __name__ == '__main__':
     unittest.main()

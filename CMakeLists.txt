@@ -100,7 +100,8 @@ catkin_install_python(PROGRAMS
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
-install(PROGRAMS scripts/run_mission.sh scripts/start_sitl.sh
+install(PROGRAMS scripts/run_mission.sh scripts/run_avoidance_matrix.sh
+  scripts/start_sitl.sh
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

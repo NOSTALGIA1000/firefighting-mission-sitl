@@ -1,96 +1,83 @@
-# 队员 C 路径规划与物资投放接手说明
+# 队员 C：路径规划与物资投放交接
 
-## 已交付能力
+先读：`docs/CURRENT_HANDOFF.zh-CN.md`。
 
-- 点到点固定高度避障：`CLIMB -> CRUISE -> DESCEND -> REACHED`。
-- 默认安全巡航高度：`2.30 m`；水平到点阈值：`0.12 m`；垂直到点阈值：`0.08 m`。
-- `competition_main.py` 保持为唯一 MAVROS 位置设定点发布者，路径节点只发布内部设定点，避免控制冲突。
-- 双通道投放：`1=FIRE`（消防物资），`2=RESCUE`（救援物资）。
-- 高层投放服务检查对准、水平速度、投放高度和重复投放，再调用 Gazebo 低层分离服务。
-- Gazebo 插件支持 ROS Service，并保留原有 `drop_fire`、`drop_rescue` Bool 话题兼容。
+## 当前方案
 
-## 代码位置
+- 活动方案：固定地图 A* + 前向双目视觉随机圆柱绕障。
+- 全程目标高度：`1.20m`；验收范围：`1.10–1.30m`。
+- 旧 `CLIMB -> CRUISE(2.30m) -> DESCEND` 仅保留在历史设计文档，不再用于比赛活动链。
+- `competition_main.py` 是唯一 MAVROS 位置设定点发布者。
 
-- 纯路径逻辑：`src/firefighting_mission/path_planner.py`
-- 路径 ROS 节点：`scripts/path_planner.py`
-- OFFBOARD 接线：`scripts/competition_main.py`、`src/firefighting_mission/competition_main.py`
-- 纯投放门控：`src/firefighting_mission/supply_drop.py`
-- 投放 ROS 节点：`scripts/supply_drop.py`
-- Gazebo 分离插件：`include/firefighting_mission/payload_plugin.hpp`、`src/payload_plugin.cpp`
-- 服务定义：`srv/DropSupply.srv`
-- 单元与集成测试：`test/test_path_planner.py`、`test/path_planner_ros_test.py`、`test/test_supply_drop.py`、`test/payload_drop_ros_test.py`
+## 路径接口
 
-## ROS 接口
-
-| 名称 | 类型 | 方向 | 用途 |
+| 接口 | 类型 | 方向 | 说明 |
 | --- | --- | --- | --- |
-| `/fire_mission/point_goal` | `geometry_msgs/PoseStamped` | 输入 | 最终目标点 |
-| `/fire_mission/path_setpoint` | `geometry_msgs/PoseStamped` | 输出 | 当前分段设定点 |
-| `/fire_mission/path_status` | `std_msgs/String` | 输出 | `IDLE/CLIMB/CRUISE/DESCEND/REACHED` |
-| `/fire_mission/aligned` | `std_msgs/Bool` | 输入 | 目标对准确认 |
-| `/fire_mission/drop_supply` | `firefighting_mission/DropSupply` | 高层服务 | 安全门控投放 |
-| `/fire_iris/drop_supply` | `firefighting_mission/DropSupply` | 低层服务 | Gazebo 关节分离 |
+| `/fire_mission/point_goal` | `geometry_msgs/PoseStamped` | 输入 | 任务目标点 |
+| `/fire_mission/obstacles` | `ObstacleArray` | 输入 | 双目障碍簇与感知状态 |
+| `/fire_mission/path_setpoint` | `geometry_msgs/PoseStamped` | 输出 | 发给主控的内部设定点 |
+| `/fire_mission/path_status` | `std_msgs/String` | 输出 | 当前规划状态 |
+| `/fire_mission/avoidance_status` | `AvoidanceStatus` | 输出 | 绕障方向、净空、原因、目标 |
 
-高层投放条件：已对准、水平速度不超过 `0.10 m/s`、高度处于 `1.15-1.45 m`、该通道未释放。低层调用失败不会消耗通道，可排障后重试。
+路径状态：
 
-## 编译与测试
+```text
+FOLLOW_ROUTE
+  -> BRAKE -> OBSERVE -> SELECT_SIDE
+  -> SIDESTEP -> PASS -> REJOIN
+  -> FOLLOW_ROUTE -> REACHED
+```
+
+安全异常使用 `HOLD_UNSAFE`。
+
+## 双目输入模式
+
+`stereo_obstacle_node.py` 支持：
+
+- `depth`：已对齐深度图，仿真当前使用。
+- `points`：点云输入。
+- `raw_stereo`：左右图内部计算视差。
+
+仿真相机前置偏移默认 `0.32m`，由 `path_planner.py` 参数 `sensor_forward_offset` 设置。真机必须重新测量，不可照抄。
+
+活动路径代码不得读取随机圆柱真值 `CYLINDER_POSES` 或 Gazebo `/gazebo/model_states`。
+
+## 投放接口
+
+| 接口 | 类型 | 说明 |
+| --- | --- | --- |
+| `/fire_mission/drop_supply` | `DropSupply` 服务 | 高层安全门控 |
+| `/fire_iris/drop_supply` | `DropSupply` 服务 | Gazebo 低层分离 |
+
+- `channel=1`：消防物资。
+- `channel=2`：救援物资。
+- 高层门控：已对准、水平速度不超过 `0.10m/s`、高度 `1.15–1.45m`、通道未使用。
+- 真机替换低层 Gazebo 服务为舵机驱动服务；高层接口可保持。
+
+## 已验证
+
+- OFFBOARD 自动起飞、1.2m悬停。
+- 路径节点到主控的单一设定点链路。
+- 纯路径规划专项测试 19/19 通过。
+- 固定地图 A*、相机偏移补偿、固定墙/安全网视觉过滤。
+- 双通道 Gazebo 物理分离。
+
+## 尚未通过
+
+- 四种随机圆柱组合的完整 `SIDESTEP -> PASS -> REJOIN` 实飞。
+- 圆柱暂时离开视野后的安全恢复。
+- 路径节点自身的双目消息断流看门狗。
+- 真机双目标定与外参配置。
+
+## 复现当前问题
 
 ```bash
 cd /home/ss/catkin_ws
-source /opt/ros/melodic/setup.bash
-catkin_make
 source devel/setup.bash
-rostest firefighting_mission path_planner.test
-rostest firefighting_mission payload_drop.test
+export ROS_IP=127.0.0.1 ROS_HOSTNAME=127.0.0.1
+export ROS_MASTER_URI=http://127.0.0.1:11311 DISPLAY=:0
+rostest firefighting_mission visual_avoidance_smoke.test seed:=1
+cat src/firefighting_mission/artifacts/avoidance_matrix/1/smoke.json
 ```
 
-## 路径飞行演示
-
-终端 1：
-
-```bash
-roslaunch firefighting_mission competition_takeoff.launch gui:=true enable_path_planner:=true
-```
-
-待状态进入 `HOVER` 后，终端 2 发布目标：
-
-```bash
-rostopic pub -1 /fire_mission/point_goal geometry_msgs/PoseStamped "{header: {frame_id: 'map'}, pose: {position: {x: 2.70, y: -1.90, z: 1.20}, orientation: {w: 1.0}}}"
-```
-
-观察阶段：
-
-```bash
-rostopic echo /fire_mission/path_status
-rostopic echo /mavros/local_position/pose
-```
-
-## 投放调用
-
-完整消防 launch 已启动 `supply_drop.py`。满足投放条件并保持 `/fire_mission/aligned=true` 后：
-
-```bash
-rosservice call /fire_mission/drop_supply "channel: 1"
-rosservice call /fire_mission/drop_supply "channel: 2"
-```
-
-仅调试 Gazebo 分离机构时，可绕过高层门控：
-
-```bash
-rosservice call /fire_iris/drop_supply "channel: 1"
-```
-
-## 当前边界
-
-- 策略是固定高度分段飞行，不是在线 A*、RRT 或动态重规划。
-- `2.30 m` 安全高度按当前最高 `2.00 m` 障碍设计；更换场地或机体尺寸后需重新校核净空。
-- 真机使用时应把 Gazebo 低层服务替换成舵机驱动服务，高层安全门控与通道语义可保持不变。
-
-## 验证记录
-
-- Windows Python 单元测试：`99/99 PASS`。
-- VM Python 2.7 单元测试：`99/99 PASS`。
-- VM `catkin_make`：通过。
-- VM 路径 ROS 合约：通过，确认 `CLIMB -> CRUISE -> DESCEND -> REACHED`。
-- VM Gazebo 物理投放测试：通过；已验证通道 1 分离、通道 2 保持、重复拒绝和旧话题兼容。
-- VM 原生 PX4 Iris 实飞：通过。目标 `(2.70,-1.90,1.20)` 到达；随后返回 `(0,0,1.20)`，最终位置 `(-0.044,0.041,1.233)`，状态 `REACHED`，飞控保持 `OFFBOARD`。
+重点看 `event_trace`、`contact_pairs`、`clearances`、`obstacles`、`last_pose` 和 `last_yaw`。
