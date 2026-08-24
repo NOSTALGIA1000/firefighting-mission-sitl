@@ -57,6 +57,13 @@ class FieldMapTest(unittest.TestCase):
         self.assertEqual((1.40, -0.45), route[-1])
         self.assertLess(len(route), 20)
 
+    def test_real_hazard_goal_survives_grid_rounding_near_board(self):
+        route = plan_route((0.0, 0.0), (1.25, -0.10))
+
+        self.assertEqual((1.25, -0.10), route[-1])
+        self.assertTrue(all(point_is_free(point, inflation=0.45)
+                            for point in route))
+
 
 if __name__ == '__main__':
     unittest.main()

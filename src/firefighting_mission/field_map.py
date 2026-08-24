@@ -100,11 +100,29 @@ def plan_route(start, goal, resolution=0.10, inflation=0.45):
         return (0 <= node[0] <= columns and 0 <= node[1] <= rows and
                 point_is_free(world(node), inflation))
 
-    start_node = grid(start)
-    goal_node = grid(goal)
-    if not valid(start_node):
+    def nearest_valid(node, exact_point):
+        if valid(node):
+            return node
+        candidates = []
+        for radius in range(1, 6):
+            for dx in range(-radius, radius + 1):
+                for dy in range(-radius, radius + 1):
+                    if max(abs(dx), abs(dy)) != radius:
+                        continue
+                    candidate = (node[0] + dx, node[1] + dy)
+                    if valid(candidate):
+                        candidates.append(candidate)
+            if candidates:
+                return min(candidates,
+                           key=lambda value: _heuristic(world(value),
+                                                        exact_point))
+        return None
+
+    start_node = nearest_valid(grid(start), start)
+    goal_node = nearest_valid(grid(goal), goal)
+    if start_node is None:
         raise ValueError('start_blocked')
-    if not valid(goal_node):
+    if goal_node is None:
         raise ValueError('goal_blocked')
 
     directions = ((1, 0), (0, 1), (-1, 0), (0, -1),
