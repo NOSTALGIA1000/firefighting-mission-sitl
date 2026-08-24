@@ -3,6 +3,7 @@
 
 #include <gazebo/common/Plugin.hh>
 #include <gazebo/physics/physics.hh>
+#include <firefighting_mission/DropSupply.h>
 #include <ros/ros.h>
 #include <std_msgs/Bool.h>
 
@@ -25,7 +26,9 @@ class PayloadPlugin : public gazebo::ModelPlugin {
     bool released = false;
   };
 
-  void Release(unsigned channel);
+  bool Release(unsigned channel, std::string* reason);
+  bool DropService(DropSupply::Request& request,
+                   DropSupply::Response& response);
   void FireCallback(const std_msgs::BoolConstPtr& message);
   void RescueCallback(const std_msgs::BoolConstPtr& message);
 
@@ -35,6 +38,7 @@ class PayloadPlugin : public gazebo::ModelPlugin {
   std::unique_ptr<ros::NodeHandle> node_;
   ros::Subscriber fire_subscriber_;
   ros::Subscriber rescue_subscriber_;
+  ros::ServiceServer drop_service_;
   std::mutex mutex_;
 };
 
