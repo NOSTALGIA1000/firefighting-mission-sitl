@@ -1,0 +1,29 @@
+<launch>
+  <arg name="input_mode" default="depth"/>
+  <arg name="camera_namespace" default="fire_stereo"/>
+  <arg name="left_namespace" default="left"/>
+  <arg name="right_namespace" default="right"/>
+  <arg name="depth_topic" default="/fire_stereo/depth/image_raw"/>
+  <arg name="camera_info_topic" default="/fire_stereo/depth/camera_info"/>
+  <arg name="points_topic" default="/fire_stereo/points"/>
+
+  <group if="$(eval arg('input_mode') == 'raw_stereo')"
+         ns="$(arg camera_namespace)">
+    <node pkg="nodelet" type="nodelet" name="stereo_manager"
+          args="manager" output="screen"/>
+    <include file="$(find stereo_image_proc)/launch/stereo_image_proc.launch">
+      <arg name="manager" value="/$(arg camera_namespace)/stereo_manager"/>
+      <arg name="left" value="$(arg left_namespace)"/>
+      <arg name="right" value="$(arg right_namespace)"/>
+      <arg name="approximate_sync" value="true"/>
+    </include>
+  </group>
+
+  <node pkg="firefighting_mission" type="stereo_obstacle_node.py"
+        name="stereo_obstacle_adapter" output="screen">
+    <param name="input_mode" value="$(arg input_mode)"/>
+    <param name="depth_topic" value="$(arg depth_topic)"/>
+    <param name="camera_info_topic" value="$(arg camera_info_topic)"/>
+    <param name="points_topic" value="$(arg points_topic)"/>
+  </node>
+</launch>

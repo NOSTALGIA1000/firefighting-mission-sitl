@@ -5,6 +5,7 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   gazebo_msgs
   geometry_msgs
+  message_filters
   mavros_msgs
   message_generation
   roscpp
@@ -38,6 +39,7 @@ catkin_package(
   CATKIN_DEPENDS
   geometry_msgs
   gazebo_msgs
+  message_filters
   mavros_msgs
   cv_bridge
   message_runtime
@@ -70,6 +72,7 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_nosetests(test/test_supply_drop.py)
   catkin_add_nosetests(test/test_safety.py)
   catkin_add_nosetests(test/test_scoring.py)
+  catkin_add_nosetests(test/test_stereo_obstacles.py)
   catkin_add_nosetests(test/test_state_machine.py)
   catkin_add_nosetests(test/test_world_generator.py)
   add_rostest(test/navigation.test)
@@ -89,6 +92,7 @@ catkin_install_python(PROGRAMS
   scripts/competition_main.py
   scripts/path_planner.py
   scripts/supply_drop.py
+  scripts/stereo_obstacle_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
