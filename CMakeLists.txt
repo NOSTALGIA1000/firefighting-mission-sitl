@@ -62,6 +62,7 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_nosetests(test/test_competition_main.py)
   catkin_add_nosetests(test/test_perception.py)
   catkin_add_nosetests(test/test_payload.py)
+  catkin_add_nosetests(test/test_supply_drop.py)
   catkin_add_nosetests(test/test_safety.py)
   catkin_add_nosetests(test/test_scoring.py)
   catkin_add_nosetests(test/test_state_machine.py)
@@ -82,6 +83,7 @@ catkin_install_python(PROGRAMS
   scripts/mavros_bridge_node.py
   scripts/competition_main.py
   scripts/path_planner.py
+  scripts/supply_drop.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

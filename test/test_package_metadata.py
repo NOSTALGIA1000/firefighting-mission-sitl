@@ -70,6 +70,12 @@ class PackageMetadataTest(unittest.TestCase):
         args = [node.attrib.get('name') for node in launch.findall('arg')]
         self.assertIn('enable_path_planner', args)
 
+    def test_supply_drop_node_is_installed(self):
+        with open(os.path.join(PROJECT_ROOT, 'CMakeLists.txt'), 'r') as handle:
+            cmake = handle.read()
+
+        self.assertIn('scripts/supply_drop.py', cmake)
+
 
 if __name__ == '__main__':
     unittest.main()
