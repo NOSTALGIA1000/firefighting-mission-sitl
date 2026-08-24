@@ -50,6 +50,8 @@ class PackageMetadataTest(unittest.TestCase):
         with open(attributes_path, 'r') as handle:
             attributes = handle.read()
 
+        self.assertTrue(re.search(r'^\*\s+text=auto\s+eol=lf$',
+                                  attributes, re.MULTILINE))
         self.assertTrue(re.search(r'scripts/\*\s+text\s+eol=lf', attributes))
         self.assertTrue(re.search(r'\*\.py\s+text\s+eol=lf', attributes))
 
