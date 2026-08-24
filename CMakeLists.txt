@@ -10,14 +10,18 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   sensor_msgs
+  stereo_msgs
   std_msgs
 )
 
 find_package(gazebo REQUIRED)
 
 add_message_files(FILES
+  AvoidanceStatus.msg
   DropResult.msg
   MissionEvent.msg
+  ObstacleArray.msg
+  ObstacleCluster.msg
   TargetDetection.msg
 )
 
@@ -40,6 +44,7 @@ catkin_package(
   roscpp
   rospy
   sensor_msgs
+  stereo_msgs
   std_msgs
   DEPENDS GAZEBO
 )

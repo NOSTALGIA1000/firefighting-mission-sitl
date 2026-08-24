@@ -12,6 +12,11 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class PackageMetadataTest(unittest.TestCase):
+    @staticmethod
+    def _read(relative_path):
+        with open(os.path.join(PROJECT_ROOT, relative_path), 'r') as handle:
+            return handle.read()
+
     def test_maintainer_email_has_valid_fully_qualified_domain(self):
         package = ET.parse(os.path.join(PROJECT_ROOT, 'package.xml')).getroot()
         email = package.find('maintainer').attrib['email']
@@ -82,6 +87,16 @@ class PackageMetadataTest(unittest.TestCase):
         self.assertIn('scripts/supply_drop.py', cmake)
         node_types = [node.attrib.get('type') for node in launch.findall('node')]
         self.assertIn('supply_drop.py', node_types)
+
+    def test_stereo_avoidance_messages_are_generated(self):
+        cmake = self._read('CMakeLists.txt')
+        package = self._read('package.xml')
+        for name in ('ObstacleCluster.msg', 'ObstacleArray.msg',
+                     'AvoidanceStatus.msg'):
+            self.assertIn(name, cmake)
+            self.assertTrue(os.path.isfile(os.path.join(PROJECT_ROOT, 'msg', name)))
+        self.assertIn('<depend>stereo_msgs</depend>', package)
+        self.assertIn('<exec_depend>stereo_image_proc</exec_depend>', package)
 
 
 if __name__ == '__main__':
