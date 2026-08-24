@@ -3,7 +3,12 @@ from __future__ import division, print_function
 from collections import namedtuple
 
 
-PositionSetpoint = namedtuple('PositionSetpoint', 'x y z')
+class PositionSetpoint(namedtuple('_PositionSetpoint', 'x y z yaw')):
+    __slots__ = ()
+
+    def __new__(cls, x, y, z, yaw=0.0):
+        return super(PositionSetpoint, cls).__new__(
+            cls, float(x), float(y), float(z), float(yaw))
 ModeRequest = namedtuple('ModeRequest', 'mode')
 ControllerOutputs = namedtuple(
     'ControllerOutputs', 'state setpoints mode_requests arm_request')

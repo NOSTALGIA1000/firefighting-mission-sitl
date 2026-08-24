@@ -17,6 +17,11 @@ from firefighting_mission.competition_main import (CompetitionMain,
 
 
 class CompetitionMainTest(unittest.TestCase):
+    def test_planned_setpoint_preserves_yaw(self):
+        point = PositionSetpoint(1.0, 2.0, 1.2, 1.5708)
+
+        self.assertAlmostEqual(1.5708, point.yaw, places=4)
+
     def test_waits_for_fcu_before_publishing_takeoff_control(self):
         controller = CompetitionMain(takeoff_altitude=1.2, prestream_count=3)
 
@@ -120,7 +125,7 @@ class CompetitionMainTest(unittest.TestCase):
         controller = CompetitionMain(takeoff_altitude=1.2, prestream_count=1)
         outputs = controller.tick(1.0, connected=True, armed=True,
                                   mode='OFFBOARD', altitude=1.2)
-        planned = PositionSetpoint(0.0, 0.0, 2.3)
+        planned = PositionSetpoint(0.4, -0.2, 1.2, 0.7)
 
         selected = select_active_setpoints(outputs, planned,
                                            path_control_enabled=True)
@@ -133,7 +138,7 @@ class CompetitionMainTest(unittest.TestCase):
                                   mode='OFFBOARD', altitude=0.8)
 
         selected = select_active_setpoints(
-            outputs, PositionSetpoint(0.0, 0.0, 2.3),
+            outputs, PositionSetpoint(0.0, 0.0, 1.2),
             path_control_enabled=False)
 
         self.assertEqual(outputs.setpoints, selected)

@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 from __future__ import division, print_function
 
+import math
+
 import rospy
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import Imu
@@ -27,6 +29,7 @@ class CompetitionMainNode(object):
         self.imu = None
         self.path_setpoint = None
         self.path_control_enabled = False
+        self.terminal_command = ''
         self.setpoint_pub = rospy.Publisher(
             self.mavros_prefix + '/setpoint_position/local',
             PoseStamped, queue_size=10)
@@ -42,6 +45,8 @@ class CompetitionMainNode(object):
         rospy.Subscriber(self.mavros_prefix + '/imu/data', Imu, self._imu)
         rospy.Subscriber('/fire_mission/path_setpoint', PoseStamped,
                          self._path_setpoint)
+        rospy.Subscriber('/xtdrone/iris_0/cmd', String,
+                         self._flight_command)
         self.timer = rospy.Timer(rospy.Duration(0.05), self._tick)
 
     def _state(self, message):
@@ -55,7 +60,18 @@ class CompetitionMainNode(object):
 
     def _path_setpoint(self, message):
         point = message.pose.position
-        self.path_setpoint = PositionSetpoint(point.x, point.y, point.z)
+        orientation = message.pose.orientation
+        numerator = 2.0 * (orientation.w * orientation.z +
+                           orientation.x * orientation.y)
+        denominator = 1.0 - 2.0 * (orientation.y * orientation.y +
+                                   orientation.z * orientation.z)
+        self.path_setpoint = PositionSetpoint(
+            point.x, point.y, point.z, math.atan2(numerator, denominator))
+
+    def _flight_command(self, message):
+        command = message.data.strip().upper()
+        if command in ('AUTO.LAND', 'DISARM'):
+            self.terminal_command = command
 
     def _altitude(self):
         if self.pose is None:
@@ -69,10 +85,25 @@ class CompetitionMainNode(object):
         pose.pose.position.x = point.x
         pose.pose.position.y = point.y
         pose.pose.position.z = point.z
-        pose.pose.orientation.w = 1.0
+        pose.pose.orientation.z = math.sin(point.yaw / 2.0)
+        pose.pose.orientation.w = math.cos(point.yaw / 2.0)
         self.setpoint_pub.publish(pose)
 
     def _tick(self, _event):
+        if self.terminal_command == 'AUTO.LAND':
+            self.phase_pub.publish('AUTO.LAND')
+            try:
+                self.set_mode(custom_mode='AUTO.LAND')
+            except rospy.ServiceException as exc:
+                rospy.logwarn_throttle(1.0, 'AUTO.LAND failed: %s', exc)
+            return
+        if self.terminal_command == 'DISARM':
+            self.phase_pub.publish('DISARM')
+            try:
+                self.arm(False)
+            except rospy.ServiceException as exc:
+                rospy.logwarn_throttle(1.0, 'disarming failed: %s', exc)
+            return
         outputs = self.controller.tick(
             rospy.Time.now().to_sec(),
             connected=self.state.connected,
