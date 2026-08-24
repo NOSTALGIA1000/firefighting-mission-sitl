@@ -67,6 +67,7 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_nosetests(test/test_state_machine.py)
   catkin_add_nosetests(test/test_world_generator.py)
   add_rostest(test/navigation.test)
+  add_rostest(test/path_planner.test)
   add_rostest(test/payload_drop.test)
 endif()
 
@@ -80,6 +81,7 @@ catkin_install_python(PROGRAMS
   scripts/mission_recorder_node.py
   scripts/mavros_bridge_node.py
   scripts/competition_main.py
+  scripts/path_planner.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

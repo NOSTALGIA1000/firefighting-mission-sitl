@@ -60,6 +60,16 @@ class PackageMetadataTest(unittest.TestCase):
         self.assertTrue(os.path.isfile(service))
         self.assertIn('add_service_files(FILES\n  DropSupply.srv', cmake)
 
+    def test_path_planner_node_is_installed(self):
+        with open(os.path.join(PROJECT_ROOT, 'CMakeLists.txt'), 'r') as handle:
+            cmake = handle.read()
+        launch = ET.parse(os.path.join(PROJECT_ROOT, 'launch',
+                                       'competition_takeoff.launch')).getroot()
+
+        self.assertIn('scripts/path_planner.py', cmake)
+        args = [node.attrib.get('name') for node in launch.findall('arg')]
+        self.assertIn('enable_path_planner', args)
+
 
 if __name__ == '__main__':
     unittest.main()

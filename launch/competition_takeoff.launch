@@ -6,6 +6,7 @@
   <arg name="spawn_z" default="0.2"/>
   <arg name="mavros_prefix" default="/mavros"/>
   <arg name="takeoff_altitude" default="1.2"/>
+  <arg name="enable_path_planner" default="false"/>
 
   <param name="/use_sim_time" value="true"/>
 
@@ -16,5 +17,10 @@
         output="screen" required="true">
     <param name="mavros_prefix" value="$(arg mavros_prefix)"/>
     <param name="takeoff_altitude" value="$(arg takeoff_altitude)"/>
+  </node>
+
+  <node pkg="firefighting_mission" type="path_planner.py" name="path_planner"
+        if="$(arg enable_path_planner)" output="screen">
+    <param name="mavros_prefix" value="$(arg mavros_prefix)"/>
   </node>
 </launch>

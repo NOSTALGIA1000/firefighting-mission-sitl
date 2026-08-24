@@ -1,0 +1,8 @@
+<launch>
+  <node pkg="firefighting_mission" type="path_planner.py" name="path_planner"
+        output="screen">
+    <param name="mavros_prefix" value="/test_mavros"/>
+  </node>
+  <test test-name="path_planner_ros_contract" pkg="firefighting_mission"
+        type="path_planner_ros_test.py" time-limit="35"/>
+</launch>

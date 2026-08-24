@@ -18,6 +18,13 @@ def mission_interface_topics():
     }
 
 
+def select_active_setpoints(outputs, planned_setpoint,
+                            path_control_enabled=False):
+    if path_control_enabled and planned_setpoint is not None:
+        return [planned_setpoint]
+    return outputs.setpoints
+
+
 class CompetitionMain(object):
     """Minimal MAVROS takeoff/hover controller for the team A task."""
 

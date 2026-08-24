@@ -12,7 +12,8 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, 'src'))
 from firefighting_mission.competition_main import (CompetitionMain,
                                                     ModeRequest,
                                                     PositionSetpoint,
-                                                    mission_interface_topics)
+                                                    mission_interface_topics,
+                                                    select_active_setpoints)
 
 
 class CompetitionMainTest(unittest.TestCase):
@@ -114,6 +115,28 @@ class CompetitionMainTest(unittest.TestCase):
         self.assertEqual('TAKEOFF', hover_pending.state)
         self.assertEqual('HOVER', hover.state)
         self.assertEqual(PositionSetpoint(0.0, 0.0, 1.2), hover.setpoints[0])
+
+    def test_path_setpoint_replaces_hover_hold_after_handoff(self):
+        controller = CompetitionMain(takeoff_altitude=1.2, prestream_count=1)
+        outputs = controller.tick(1.0, connected=True, armed=True,
+                                  mode='OFFBOARD', altitude=1.2)
+        planned = PositionSetpoint(0.0, 0.0, 2.3)
+
+        selected = select_active_setpoints(outputs, planned,
+                                           path_control_enabled=True)
+
+        self.assertEqual([planned], selected)
+
+    def test_default_takeoff_setpoint_remains_before_path_handoff(self):
+        controller = CompetitionMain(takeoff_altitude=1.2, prestream_count=1)
+        outputs = controller.tick(1.0, connected=True, armed=True,
+                                  mode='OFFBOARD', altitude=0.8)
+
+        selected = select_active_setpoints(
+            outputs, PositionSetpoint(0.0, 0.0, 2.3),
+            path_control_enabled=False)
+
+        self.assertEqual(outputs.setpoints, selected)
 
     def test_state_machine_exposes_placeholder_integration_topics(self):
         topics = mission_interface_topics()

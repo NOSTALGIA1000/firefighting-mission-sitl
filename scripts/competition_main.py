@@ -8,7 +8,9 @@ from mavros_msgs.msg import State
 from mavros_msgs.srv import CommandBool, SetMode
 from std_msgs.msg import String
 
-from firefighting_mission.competition_main import CompetitionMain
+from firefighting_mission.competition_main import (CompetitionMain,
+                                                    PositionSetpoint,
+                                                    select_active_setpoints)
 
 
 class CompetitionMainNode(object):
@@ -23,6 +25,8 @@ class CompetitionMainNode(object):
         self.state = State()
         self.pose = None
         self.imu = None
+        self.path_setpoint = None
+        self.path_control_enabled = False
         self.setpoint_pub = rospy.Publisher(
             self.mavros_prefix + '/setpoint_position/local',
             PoseStamped, queue_size=10)
@@ -36,6 +40,8 @@ class CompetitionMainNode(object):
         rospy.Subscriber(self.mavros_prefix + '/local_position/pose',
                          PoseStamped, self._pose)
         rospy.Subscriber(self.mavros_prefix + '/imu/data', Imu, self._imu)
+        rospy.Subscriber('/fire_mission/path_setpoint', PoseStamped,
+                         self._path_setpoint)
         self.timer = rospy.Timer(rospy.Duration(0.05), self._tick)
 
     def _state(self, message):
@@ -46,6 +52,10 @@ class CompetitionMainNode(object):
 
     def _imu(self, message):
         self.imu = message
+
+    def _path_setpoint(self, message):
+        point = message.pose.position
+        self.path_setpoint = PositionSetpoint(point.x, point.y, point.z)
 
     def _altitude(self):
         if self.pose is None:
@@ -72,8 +82,12 @@ class CompetitionMainNode(object):
             sensor_ready=self.imu is not None,
             local_pose_available=self.pose is not None,
         )
+        if outputs.state == 'HOVER' and self.path_setpoint is not None:
+            self.path_control_enabled = True
         self.phase_pub.publish(outputs.state)
-        for point in outputs.setpoints:
+        setpoints = select_active_setpoints(
+            outputs, self.path_setpoint, self.path_control_enabled)
+        for point in setpoints:
             self._publish_setpoint(point)
         for request in outputs.mode_requests:
             try:
