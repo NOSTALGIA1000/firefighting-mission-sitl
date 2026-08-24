@@ -18,6 +18,7 @@
   <node pkg="firefighting_mission" type="safety_monitor_node.py" name="safety_monitor" output="screen"><param name="mavros_prefix" value="$(arg mavros_prefix)"/><param name="scan_topic" value="$(arg scan_topic)"/></node>
   <node pkg="firefighting_mission" type="target_detector_node.py" name="target_detector" output="screen"/>
   <node pkg="firefighting_mission" type="payload_controller_node.py" name="payload_controller" output="screen"><param name="mavros_prefix" value="$(arg mavros_prefix)"/></node>
+  <node pkg="firefighting_mission" type="supply_drop.py" name="supply_drop" output="screen"><param name="mavros_prefix" value="$(arg mavros_prefix)"/></node>
   <node pkg="firefighting_mission" type="mission_recorder_node.py" name="mission_recorder" output="screen">
     <param name="seed" value="$(arg seed)"/>
     <param name="record" value="$(arg record)"/>
