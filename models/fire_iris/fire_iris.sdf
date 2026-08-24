@@ -655,6 +655,16 @@
       </axis>
     </joint>
 
+<!-- Forward stereo-shaped metric depth camera for visual avoidance -->
+    <include>
+      <uri>model://fire_stereo_camera</uri>
+      <pose>0.16 0 0.03 0 0 0</pose>
+    </include>
+    <joint name="fire_stereo_joint" type="fixed">
+      <child>fire_stereo_camera::link</child>
+      <parent>base_link</parent>
+    </joint>
+
 <!-- For IMU-->
     <include>
       <uri>model://imu_gazebo</uri>
@@ -674,4 +684,3 @@
   </model>
 </sdf>
 <!-- vim: set noet fenc=utf-8 ff=unix sts=0 sw=4 ts=4 : -->
-

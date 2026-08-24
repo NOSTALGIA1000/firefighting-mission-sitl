@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<sdf version="1.6">
+  <model name="fire_stereo_camera">
+    <static>false</static>
+    <link name="link">
+      <inertial>
+        <mass>0.035</mass>
+        <inertia>
+          <ixx>0.000018</ixx><iyy>0.000018</iyy><izz>0.000030</izz>
+        </inertia>
+      </inertial>
+      <visual name="housing">
+        <geometry><box><size>0.045 0.12 0.035</size></box></geometry>
+        <material>
+          <ambient>0.08 0.08 0.09 1</ambient>
+          <diffuse>0.08 0.08 0.09 1</diffuse>
+        </material>
+      </visual>
+      <visual name="left_lens">
+        <pose>0.024 0.04 0 0 1.5707963 0</pose>
+        <geometry><cylinder><radius>0.012</radius><length>0.006</length></cylinder></geometry>
+        <material><ambient>0.05 0.18 0.35 1</ambient><diffuse>0.05 0.18 0.35 1</diffuse></material>
+      </visual>
+      <visual name="right_lens">
+        <pose>0.024 -0.04 0 0 1.5707963 0</pose>
+        <geometry><cylinder><radius>0.012</radius><length>0.006</length></cylinder></geometry>
+        <material><ambient>0.05 0.18 0.35 1</ambient><diffuse>0.05 0.18 0.35 1</diffuse></material>
+      </visual>
+      <sensor name="forward_stereo_depth" type="depth">
+        <always_on>true</always_on>
+        <update_rate>15</update_rate>
+        <visualize>false</visualize>
+        <camera>
+          <horizontal_fov>1.40</horizontal_fov>
+          <image>
+            <width>640</width><height>360</height><format>R8G8B8</format>
+          </image>
+          <clip><near>0.20</near><far>4.00</far></clip>
+        </camera>
+        <plugin name="fire_stereo_depth_plugin"
+                filename="libgazebo_ros_depth_camera.so">
+          <baseline>0.08</baseline>
+          <alwaysOn>true</alwaysOn>
+          <updateRate>15.0</updateRate>
+          <cameraName>fire_stereo</cameraName>
+          <imageTopicName>/fire_stereo/rgb/image_raw</imageTopicName>
+          <cameraInfoTopicName>/fire_stereo/rgb/camera_info</cameraInfoTopicName>
+          <depthImageTopicName>/fire_stereo/depth/image_raw</depthImageTopicName>
+          <depthImageCameraInfoTopicName>/fire_stereo/depth/camera_info</depthImageCameraInfoTopicName>
+          <pointCloudTopicName>/fire_stereo/points</pointCloudTopicName>
+          <frameName>fire_stereo_optical_frame</frameName>
+          <pointCloudCutoff>0.20</pointCloudCutoff>
+          <pointCloudCutoffMax>4.00</pointCloudCutoffMax>
+          <distortionK1>0.0</distortionK1>
+          <distortionK2>0.0</distortionK2>
+          <distortionK3>0.0</distortionK3>
+          <distortionT1>0.0</distortionT1>
+          <distortionT2>0.0</distortionT2>
+        </plugin>
+      </sensor>
+    </link>
+  </model>
+</sdf>

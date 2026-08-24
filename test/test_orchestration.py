@@ -142,7 +142,8 @@ class OrchestrationTest(unittest.TestCase):
         self.assertIn('Tools/sitl_gazebo', wrapper)
         self.assertIn('Tools/setup_gazebo.bash', wrapper)
         self.assertIn('build/px4_sitl_default', wrapper)
-        self.assertIn('GAZEBO_PLUGIN_PATH="${GAZEBO_PLUGIN_PATH:-}"', wrapper)
+        self.assertIn('/opt/ros/melodic/lib:$gazebo_system_plugin_path', wrapper)
+        self.assertIn('/usr/lib/x86_64-linux-gnu/gazebo-9/plugins', wrapper)
         self.assertIn('GAZEBO_MODEL_PATH="$package_root/models:${GAZEBO_MODEL_PATH:-}"', wrapper)
         self.assertIn('mavros_posix_sitl.launch', wrapper)
         self.assertIn('sdf="${4:-$package_root/models/fire_iris/fire_iris.sdf}"',
