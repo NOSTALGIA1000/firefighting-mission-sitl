@@ -52,6 +52,14 @@ class PackageMetadataTest(unittest.TestCase):
 
         self.assertTrue(re.search(r'scripts/\*\s+text\s+eol=lf', attributes))
 
+    def test_drop_supply_service_is_generated(self):
+        with open(os.path.join(PROJECT_ROOT, 'CMakeLists.txt'), 'r') as handle:
+            cmake = handle.read()
+        service = os.path.join(PROJECT_ROOT, 'srv', 'DropSupply.srv')
+
+        self.assertTrue(os.path.isfile(service))
+        self.assertIn('add_service_files(FILES\n  DropSupply.srv', cmake)
+
 
 if __name__ == '__main__':
     unittest.main()

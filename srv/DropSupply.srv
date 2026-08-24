@@ -1,0 +1,6 @@
+uint8 FIRE=1
+uint8 RESCUE=2
+uint8 channel
+---
+bool success
+string reason

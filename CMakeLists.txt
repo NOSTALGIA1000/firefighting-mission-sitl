@@ -21,6 +21,10 @@ add_message_files(FILES
   TargetDetection.msg
 )
 
+add_service_files(FILES
+  DropSupply.srv
+)
+
 catkin_python_setup()
 
 generate_messages(DEPENDENCIES geometry_msgs std_msgs)
