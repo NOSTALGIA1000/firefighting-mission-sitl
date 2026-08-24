@@ -16,7 +16,8 @@ class VisualPlannerConfig(object):
                  trigger_range=1.00, minimum_corridor=0.90,
                  aircraft_radius=0.20, external_clearance=0.25,
                  pass_distance=0.55, waypoint_tolerance=0.12,
-                 observation_frames=3, side_hysteresis=0.15):
+                 observation_frames=3, side_hysteresis=0.15,
+                 yaw_alignment_tolerance=0.35):
         self.altitude = float(altitude)
         self.altitude_tolerance = float(altitude_tolerance)
         self.trigger_range = float(trigger_range)
@@ -27,6 +28,36 @@ class VisualPlannerConfig(object):
         self.waypoint_tolerance = float(waypoint_tolerance)
         self.observation_frames = int(observation_frames)
         self.side_hysteresis = float(side_hysteresis)
+        self.yaw_alignment_tolerance = float(yaw_alignment_tolerance)
+
+
+def angle_difference(first, second):
+    return math.atan2(math.sin(first - second), math.cos(first - second))
+
+
+def ramp_setpoint(last, desired, current, dt, horizontal_speed=0.30,
+                  maximum_lead=0.12, yaw_rate=0.60):
+    if last is None:
+        last = (current[0], current[1], desired[2], current[3])
+    seconds = max(0.0, min(float(dt), 0.10))
+    max_step = float(horizontal_speed) * seconds
+    delta_x = desired[0] - last[0]
+    delta_y = desired[1] - last[1]
+    distance = math.hypot(delta_x, delta_y)
+    scale = min(1.0, max_step / distance) if distance > 1e-9 else 1.0
+    x_value = last[0] + delta_x * scale
+    y_value = last[1] + delta_y * scale
+    lead_x = x_value - current[0]
+    lead_y = y_value - current[1]
+    lead = math.hypot(lead_x, lead_y)
+    if lead > maximum_lead:
+        lead_scale = float(maximum_lead) / lead
+        x_value = current[0] + lead_x * lead_scale
+        y_value = current[1] + lead_y * lead_scale
+    yaw_delta = angle_difference(desired[3], last[3])
+    yaw_step = max(-yaw_rate * seconds, min(yaw_rate * seconds, yaw_delta))
+    yaw_value = last[3] + yaw_step
+    return (x_value, y_value, desired[2], yaw_value)
 
 
 def _body_to_world(pose, forward, left):
@@ -58,10 +89,29 @@ def corridor_clearances(pose, obstacle, sample_step=0.05,
     return round(left_width, 3), round(right_width, 3)
 
 
+def segment_is_free(first, second, inflation=0.20, sample_step=0.05):
+    distance = math.hypot(second[0] - first[0], second[1] - first[1])
+    count = max(1, int(math.ceil(distance / float(sample_step))))
+    for index in range(count + 1):
+        ratio = index / float(count)
+        point = (first[0] + (second[0] - first[0]) * ratio,
+                 first[1] + (second[1] - first[1]) * ratio)
+        if not point_is_free(point, inflation=inflation):
+            return False
+    return True
+
+
+def avoidance_path_is_free(start, side, passing, rejoin):
+    return (segment_is_free(start, side) and
+            segment_is_free(side, passing) and
+            segment_is_free(passing, rejoin))
+
+
 class VisualPathPlanner(object):
-    def __init__(self, config=None, route_provider=None):
+    def __init__(self, config=None, route_provider=None, path_validator=None):
         self.config = config or VisualPlannerConfig()
         self.route_provider = route_provider or plan_route
+        self.path_validator = path_validator or avoidance_path_is_free
         self.goal = None
         self.route = ()
         self.waypoint_index = 0
@@ -136,8 +186,25 @@ class VisualPathPlanner(object):
             clearances = self.clearance_override
         self.left_clearance = float(clearances[0])
         self.right_clearance = float(clearances[1])
-        left_valid = self.left_clearance >= self.config.minimum_corridor
-        right_valid = self.right_clearance >= self.config.minimum_corridor
+        forward_to_clear = (self.active_obstacle.forward_m +
+                            self.config.pass_distance)
+
+        def candidate(sign):
+            obstacle_edge = (self.active_obstacle.left_edge_m if sign > 0.0
+                             else abs(self.active_obstacle.right_edge_m))
+            lateral = sign * (obstacle_edge + self.config.aircraft_radius +
+                              self.config.external_clearance)
+            side_xy = _body_to_world(pose, 0.0, lateral)
+            pass_xy = _body_to_world(pose, forward_to_clear, lateral)
+            rejoin_xy = _body_to_world(pose, forward_to_clear, 0.0)
+            return side_xy, pass_xy, rejoin_xy
+
+        left_candidate = candidate(1.0)
+        right_candidate = candidate(-1.0)
+        left_valid = (self.left_clearance >= self.config.minimum_corridor and
+                      self.path_validator(pose[:2], *left_candidate))
+        right_valid = (self.right_clearance >= self.config.minimum_corridor and
+                       self.path_validator(pose[:2], *right_candidate))
         if not left_valid and not right_valid:
             self.state = 'HOLD_UNSAFE'
             return self._hold(pose, 'no_safe_corridor', remember=False)
@@ -157,21 +224,10 @@ class VisualPathPlanner(object):
             side = 'LEFT'
         self.selected_side = side
         self.last_selected_side = side
-        sign = 1.0 if side == 'LEFT' else -1.0
-        obstacle_edge = (self.active_obstacle.left_edge_m if sign > 0.0
-                         else abs(self.active_obstacle.right_edge_m))
-        lateral = sign * (obstacle_edge + self.config.aircraft_radius +
-                          self.config.external_clearance)
-        forward_to_clear = (self.active_obstacle.forward_m +
-                            self.config.pass_distance)
-        side_xy = _body_to_world(pose, 0.0, lateral)
-        pass_xy = _body_to_world(pose, forward_to_clear, lateral)
-        rejoin_xy = _body_to_world(pose, forward_to_clear, 0.0)
-        self.side_target = side_xy
-        self.pass_target = pass_xy
-        self.rejoin_target = rejoin_xy
+        selected = left_candidate if side == 'LEFT' else right_candidate
+        self.side_target, self.pass_target, self.rejoin_target = selected
         self.state = 'SIDESTEP'
-        return self._command('SIDESTEP', side_xy, self.route_yaw)
+        return self._command('SIDESTEP', self.side_target, self.route_yaw)
 
     def update(self, pose, obstacles, perception_ready, now):
         del now
@@ -189,12 +245,18 @@ class VisualPathPlanner(object):
 
         nearest = self._nearest_obstacle(obstacles)
         if self.state == 'FOLLOW_ROUTE':
+            route_command = self._follow_route(pose)
+            if route_command.state == 'REACHED':
+                return route_command
+            if abs(angle_difference(pose[3], route_command.target_yaw)) > \
+                    self.config.yaw_alignment_tolerance:
+                return route_command
             if (nearest is not None and
                     nearest.nearest_range_m < self.config.trigger_range):
                 self.active_obstacle = nearest
                 self.state = 'BRAKE'
                 return self._command('BRAKE', pose[:2], pose[3])
-            return self._follow_route(pose)
+            return route_command
 
         if self.state == 'BRAKE':
             self.state = 'OBSERVE'
@@ -234,7 +296,14 @@ class VisualPathPlanner(object):
             return self._command('REJOIN', self.rejoin_target, self.route_yaw)
 
         if self.state == 'HOLD_UNSAFE':
-            return self._hold(pose, 'no_safe_corridor', remember=False)
+            if nearest is None or nearest.nearest_range_m >= self.config.trigger_range:
+                self.state = 'FOLLOW_ROUTE'
+                self.selected_side = ''
+                self.active_obstacle = None
+                return self._follow_route(pose)
+            self.active_obstacle = nearest
+            self.state = 'SELECT_SIDE'
+            return self._select_side(pose)
         if self.state == 'REACHED':
             return self._command('REACHED', self.goal[:2], pose[3])
         return self._hold(pose, 'invalid_planner_state')

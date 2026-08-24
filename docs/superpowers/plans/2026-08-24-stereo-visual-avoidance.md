@@ -569,7 +569,7 @@ Expected: FAIL because model files and mount are absent.
 
 - [ ] **Step 3: Add simulation sensor model**
 
-Create one lightweight depth sensor at `640x360`, horizontal FOV about `1.40 rad`, update rate `15 Hz`, near clip `0.20 m`, far clip `4.0 m`. Use `libgazebo_ros_depth_camera.so` with exact topics above. Add two small lens visuals separated by a configurable-looking `0.08 m` baseline; visuals document stereo hardware while Gazebo depth supplies deterministic metric output equivalent to calibrated stereo processing.
+Create one lightweight depth sensor at `320x180` (chosen after VM profiling to preserve safety watchdog cadence), horizontal FOV about `1.40 rad`, update rate `15 Hz`, near clip `0.20 m`, far clip `4.0 m`. Use `libgazebo_ros_depth_camera.so` with exact topics above. Add two small lens visuals separated by a configurable-looking `0.08 m` baseline; visuals document stereo hardware while Gazebo depth supplies deterministic metric output equivalent to calibrated stereo processing.
 
 Mount at front of `base_link`, above payload, with no collision geometry. Update description to “lidar, downward target camera, forward stereo-depth camera, and dual payload bay.”
 

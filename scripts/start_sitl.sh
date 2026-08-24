@@ -5,8 +5,11 @@ seed="$1"
 world="$2"
 gui="$3"
 package_root="$(rospack find firefighting_mission)"
-sdf="${4:-$package_root/models/fire_iris/fire_iris.sdf}"
+default_sdf="$package_root/models/fire_iris/fire_iris.sdf"
+sdf="${4:-$default_sdf}"
 spawn_z="${5:-0.2}"
+case "$sdf" in __*:=*) sdf="$default_sdf" ;; esac
+case "$spawn_z" in __*:=*) spawn_z="0.2" ;; esac
 px4_root="${PX4_FIRMWARE_DIR:-/home/ss/PX4_Firmware}"
 export ROS_PACKAGE_PATH="$px4_root:$px4_root/Tools/sitl_gazebo:${ROS_PACKAGE_PATH:-}"
 gazebo_system_plugin_path="/usr/lib/x86_64-linux-gnu/gazebo-9/plugins"

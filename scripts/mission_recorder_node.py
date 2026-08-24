@@ -65,7 +65,8 @@ class MissionRecorderNode(object):
         rospy.Subscriber('/fire_mission/event', MissionEvent, self._event)
         rospy.Subscriber('/fire_mission/detection', TargetDetection, self._detection)
         rospy.Subscriber('/fire_mission/drop_result', DropResult, self._drop)
-        rospy.Subscriber('/fire_mission/annotated', Image, self._image, queue_size=1)
+        rospy.Subscriber('/fire_mission/mission_view', Image, self._image,
+                         queue_size=1)
         rospy.Subscriber(self.mavros_prefix + '/local_position/pose', PoseStamped,
                          self._pose)
         rospy.Subscriber(self.mavros_prefix + '/state', State, self._state)
@@ -140,7 +141,7 @@ class MissionRecorderNode(object):
             return
         if self.writer is None:
             height, width = image.shape[:2]
-            path = os.path.join(self.output_dir, 'annotated.mp4')
+            path = os.path.join(self.output_dir, 'mission_view.mp4')
             self.writer = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*'mp4v'),
                                           20.0, (width, height))
         self.writer.write(image)

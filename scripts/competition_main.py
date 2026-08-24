@@ -30,6 +30,7 @@ class CompetitionMainNode(object):
         self.path_setpoint = None
         self.path_control_enabled = False
         self.terminal_command = ''
+        self.safety_action = 'CLEAR'
         self.setpoint_pub = rospy.Publisher(
             self.mavros_prefix + '/setpoint_position/local',
             PoseStamped, queue_size=10)
@@ -47,6 +48,8 @@ class CompetitionMainNode(object):
                          self._path_setpoint)
         rospy.Subscriber('/xtdrone/iris_0/cmd', String,
                          self._flight_command)
+        rospy.Subscriber('/fire_mission/safety_status', String,
+                         self._safety_status)
         self.timer = rospy.Timer(rospy.Duration(0.05), self._tick)
 
     def _state(self, message):
@@ -72,6 +75,24 @@ class CompetitionMainNode(object):
         command = message.data.strip().upper()
         if command in ('AUTO.LAND', 'DISARM'):
             self.terminal_command = command
+
+    def _safety_status(self, message):
+        self.safety_action = message.data.split(':', 1)[0].upper()
+        airborne = bool(self.state.armed and self.pose is not None and
+                        self.pose.pose.position.z > 0.25)
+        if self.safety_action == 'LAND' and airborne:
+            self.terminal_command = 'AUTO.LAND'
+        elif self.safety_action in ('HOVER', 'RETREAT') and airborne:
+            point = self.pose.pose.position
+            orientation = self.pose.pose.orientation
+            numerator = 2.0 * (orientation.w * orientation.z +
+                               orientation.x * orientation.y)
+            denominator = 1.0 - 2.0 * (orientation.y * orientation.y +
+                                       orientation.z * orientation.z)
+            self.path_setpoint = PositionSetpoint(
+                point.x, point.y, point.z,
+                math.atan2(numerator, denominator))
+            self.path_control_enabled = True
 
     def _altitude(self):
         if self.pose is None:

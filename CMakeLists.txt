@@ -75,6 +75,7 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_nosetests(test/test_scoring.py)
   catkin_add_nosetests(test/test_stereo_obstacles.py)
   catkin_add_nosetests(test/test_stereo_model.py)
+  catkin_add_nosetests(test/test_avoidance_overlay.py)
   catkin_add_nosetests(test/test_state_machine.py)
   catkin_add_nosetests(test/test_world_generator.py)
   add_rostest(test/navigation.test)
@@ -95,6 +96,7 @@ catkin_install_python(PROGRAMS
   scripts/path_planner.py
   scripts/supply_drop.py
   scripts/stereo_obstacle_node.py
+  scripts/mission_overlay_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

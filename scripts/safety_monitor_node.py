@@ -8,6 +8,7 @@ from geometry_msgs.msg import PoseStamped, Twist
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import String
 
+from firefighting_mission.msg import ObstacleArray
 from firefighting_mission.safety import SafetyMonitor
 
 
@@ -24,10 +25,13 @@ class SafetyMonitorNode(object):
     def __init__(self):
         self.mavros_prefix = rospy.get_param('~mavros_prefix',
                                               '/iris_0/mavros').rstrip('/')
-        self.monitor = SafetyMonitor()
+        self.monitor = SafetyMonitor(
+            stale_hover=rospy.get_param('~stereo_stale_hover', 0.30),
+            stale_land=rospy.get_param('~stereo_stale_land', 1.00))
         self.pose = None
         self.pose_stamp = rospy.Time(0)
         self.scan_stamp = rospy.Time(0)
+        self.stereo_stamp = rospy.Time(0)
         self.minimum_obstacle = float('inf')
         self.status_pub = rospy.Publisher('/fire_mission/safety_status', String,
                                           queue_size=1, latch=True)
@@ -36,6 +40,8 @@ class SafetyMonitorNode(object):
         rospy.Subscriber(self.mavros_prefix + '/local_position/pose', PoseStamped,
                          self._pose)
         rospy.Subscriber(rospy.get_param('~scan_topic', '/scan'), LaserScan, self._scan)
+        rospy.Subscriber('/fire_mission/obstacles', ObstacleArray,
+                         self._obstacles)
         self.timer = rospy.Timer(rospy.Duration(0.1), self._tick)
 
     def _pose(self, message):
@@ -48,6 +54,10 @@ class SafetyMonitorNode(object):
         self.minimum_obstacle = min(valid) if valid else float('inf')
         self.scan_stamp = rospy.Time.now()
 
+    def _obstacles(self, message):
+        if message.ready:
+            self.stereo_stamp = rospy.Time.now()
+
     def _tick(self, _event):
         now = rospy.Time.now()
         if self.pose is None:
@@ -59,7 +69,8 @@ class SafetyMonitorNode(object):
                               position.y + 3.35, 0.65 - position.y)
         status = self.monitor.evaluate(
             (now - self.pose_stamp).to_sec(), (now - self.scan_stamp).to_sec(),
-            roll, pitch, position.z, self.minimum_obstacle, boundary_margin)
+            roll, pitch, position.z, self.minimum_obstacle, boundary_margin,
+            stereo_age=(now - self.stereo_stamp).to_sec())
         self.status_pub.publish('%s:%s' % (status.action, status.reason))
         if status.action != 'CLEAR':
             override = Twist()

@@ -3,7 +3,6 @@ from __future__ import division, print_function
 
 from collections import deque
 
-import message_filters
 import numpy as np
 import rospy
 from cv_bridge import CvBridge, CvBridgeError
@@ -25,6 +24,9 @@ class StereoObstacleNode(object):
         self.points_topic = rospy.get_param(
             '~points_topic', '/fire_stereo/points')
         self.stale_seconds = float(rospy.get_param('~stale_seconds', 0.30))
+        self.fallback_fx = float(rospy.get_param('~fallback_fx', 0.0))
+        self.fallback_cx = float(rospy.get_param('~fallback_cx', -1.0))
+        self.camera_info = None
         self.bridge = CvBridge()
         self.history = deque(maxlen=int(rospy.get_param('~history_frames', 3)))
         self.last_stamp = None
@@ -32,11 +34,11 @@ class StereoObstacleNode(object):
             '/fire_mission/obstacles', ObstacleArray, queue_size=1)
 
         if self.input_mode == 'depth':
-            depth_sub = message_filters.Subscriber(self.depth_topic, Image)
-            info_sub = message_filters.Subscriber(self.info_topic, CameraInfo)
-            self.synchronizer = message_filters.ApproximateTimeSynchronizer(
-                [depth_sub, info_sub], queue_size=5, slop=0.08)
-            self.synchronizer.registerCallback(self._depth)
+            self.info_sub = rospy.Subscriber(
+                self.info_topic, CameraInfo, self._camera_info, queue_size=1)
+            self.depth_sub = rospy.Subscriber(
+                self.depth_topic, Image, self._depth, queue_size=1,
+                buff_size=2 ** 24)
         elif self.input_mode in ('points', 'raw_stereo'):
             self.points_sub = rospy.Subscriber(
                 self.points_topic, PointCloud2, self._points, queue_size=1)
@@ -71,8 +73,23 @@ class StereoObstacleNode(object):
         stable = stable_clusters(tuple(self.history), required=required)
         self._publish(stamp, stable, True)
 
-    def _depth(self, image_message, info_message):
-        if not info_message.K or float(info_message.K[0]) <= 0.0:
+    def _camera_info(self, message):
+        if message.K and float(message.K[0]) > 0.0:
+            self.camera_info = message
+
+    def _intrinsics(self, image_width):
+        if self.camera_info is not None:
+            return (float(self.camera_info.K[0]),
+                    float(self.camera_info.K[2]))
+        if self.fallback_fx > 0.0:
+            center = (self.fallback_cx if self.fallback_cx >= 0.0 else
+                      (float(image_width) - 1.0) / 2.0)
+            return self.fallback_fx, center
+        return None
+
+    def _depth(self, image_message):
+        intrinsics = self._intrinsics(image_message.width)
+        if intrinsics is None:
             self._publish(image_message.header.stamp, (), False,
                           'camera_info_missing')
             return
@@ -92,8 +109,7 @@ class StereoObstacleNode(object):
             self._publish(image_message.header.stamp, (), False,
                           'unsupported_encoding')
             return
-        clusters = clusters_from_depth(depth_m, info_message.K[0],
-                                       info_message.K[2])
+        clusters = clusters_from_depth(depth_m, intrinsics[0], intrinsics[1])
         self._accept(image_message.header.stamp, clusters)
 
     def _points(self, message):

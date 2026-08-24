@@ -9,7 +9,7 @@ from std_msgs.msg import String
 
 from firefighting_mission.msg import (AvoidanceStatus, ObstacleArray)
 from firefighting_mission.path_planner import (
-    VisualPathPlanner, VisualPlannerConfig)
+    VisualPathPlanner, VisualPlannerConfig, ramp_setpoint)
 from firefighting_mission.stereo_obstacles import ObstacleClusterData
 
 
@@ -33,6 +33,8 @@ class PathPlannerNode(object):
         self.obstacles = ()
         self.perception_ready = False
         self.perception_reason = 'depth_stale'
+        self.output_setpoint = None
+        self.last_output_time = None
         self.target_pub = rospy.Publisher(
             '/fire_mission/path_setpoint', PoseStamped,
             queue_size=1, latch=True)
@@ -76,15 +78,25 @@ class PathPlannerNode(object):
         return (point.x, point.y, point.z,
                 quaternion_yaw(message.pose.orientation))
 
-    def _publish_target(self, command):
+    def _publish_target(self, command, pose, now):
+        dt = (0.05 if self.last_output_time is None else
+              max(0.0, now - self.last_output_time))
+        desired = (command.target[0], command.target[1], command.target[2],
+                   command.target_yaw)
+        self.output_setpoint = ramp_setpoint(
+            self.output_setpoint, desired, pose, dt,
+            horizontal_speed=rospy.get_param('~maximum_horizontal_speed', 0.30),
+            maximum_lead=rospy.get_param('~maximum_setpoint_lead', 0.12),
+            yaw_rate=rospy.get_param('~maximum_yaw_rate', 0.60))
+        self.last_output_time = now
         target = PoseStamped()
         target.header.stamp = rospy.Time.now()
         target.header.frame_id = 'map'
-        target.pose.position.x = command.target[0]
-        target.pose.position.y = command.target[1]
-        target.pose.position.z = command.target[2]
-        target.pose.orientation.z = math.sin(command.target_yaw / 2.0)
-        target.pose.orientation.w = math.cos(command.target_yaw / 2.0)
+        target.pose.position.x = self.output_setpoint[0]
+        target.pose.position.y = self.output_setpoint[1]
+        target.pose.position.z = self.output_setpoint[2]
+        target.pose.orientation.z = math.sin(self.output_setpoint[3] / 2.0)
+        target.pose.orientation.w = math.cos(self.output_setpoint[3] / 2.0)
         self.target_pub.publish(target)
 
     def _publish_status(self, command):
@@ -115,11 +127,12 @@ class PathPlannerNode(object):
                 self.status_pub.publish('HOLD_UNSAFE')
                 return
             self.active_goal = self.requested_goal
+        now = rospy.Time.now().to_sec()
         command = self.planner.update(
             pose, self.obstacles, self.perception_ready,
-            rospy.Time.now().to_sec())
+            now)
         if command.target is not None:
-            self._publish_target(command)
+            self._publish_target(command, pose, now)
         self._publish_status(command)
 
 

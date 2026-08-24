@@ -43,7 +43,10 @@ def recording_topics(mavros_prefix, scan_topic):
     return (
         '/fire_mission/phase', '/fire_mission/event',
         '/fire_mission/detection', '/fire_mission/drop_result',
-        '/fire_mission/annotated', prefix + '/local_position/pose',
+        '/fire_mission/annotated', '/fire_mission/mission_view',
+        '/fire_mission/obstacles', '/fire_mission/avoidance_status',
+        '/fire_mission/path_status', '/fire_stereo/rgb/image_raw',
+        '/fire_stereo/depth/image_raw', prefix + '/local_position/pose',
         prefix + '/state', scan_topic, '/gazebo/model_states',
         '/gazebo/link_states', '/fire_mission/contacts',
     )

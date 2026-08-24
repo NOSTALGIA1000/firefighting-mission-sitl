@@ -658,7 +658,7 @@
 <!-- Forward stereo-shaped metric depth camera for visual avoidance -->
     <include>
       <uri>model://fire_stereo_camera</uri>
-      <pose>0.16 0 0.03 0 0 0</pose>
+      <pose>0.32 0 0.03 0 0 0</pose>
     </include>
     <joint name="fire_stereo_joint" type="fixed">
       <child>fire_stereo_camera::link</child>

@@ -9,7 +9,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, 'src'))
 
 from firefighting_mission.path_planner import (
-    VisualPathPlanner, VisualPlannerConfig, corridor_clearances)
+    VisualPathPlanner, VisualPlannerConfig, corridor_clearances, ramp_setpoint)
 from firefighting_mission.stereo_obstacles import ObstacleClusterData
 
 
@@ -22,7 +22,9 @@ def straight_route(start, goal):
 
 
 def planner_with_goal(config=None):
-    planner = VisualPathPlanner(config=config, route_provider=straight_route)
+    planner = VisualPathPlanner(
+        config=config, route_provider=straight_route,
+        path_validator=lambda start, side, passing, rejoin: True)
     planner.set_goal((2.0, 0.0, 1.2), POSE)
     return planner
 
@@ -97,6 +99,16 @@ class VisualPathPlannerTest(unittest.TestCase):
         self.assertEqual('no_safe_corridor', command.reason)
         self.assertEqual(POSE[:3], command.target)
 
+    def test_hold_unsafe_recovers_when_obstacle_leaves_view(self):
+        planner = planner_with_goal()
+        planner.clearance_override = (0.70, 0.80)
+        drive_to_select(planner)
+        planner.update(POSE, (OBSTACLE,), True, 1.5)
+
+        command = planner.update(POSE, (), True, 1.6)
+
+        self.assertEqual('FOLLOW_ROUTE', command.state)
+
     def test_visual_loss_holds_current_position(self):
         command = planner_with_goal().update(POSE, (), False, 2.0)
 
@@ -137,6 +149,46 @@ class VisualPathPlannerTest(unittest.TestCase):
 
         self.assertEqual('REACHED', command.state)
         self.assertEqual((2.0, 0.0, 1.2), command.target)
+
+    def test_goal_arrival_wins_over_unrelated_visible_obstacle(self):
+        planner = VisualPathPlanner(route_provider=straight_route)
+        planner.set_goal((0.0, 0.0, 1.2), POSE)
+
+        command = planner.update(POSE, (OBSTACLE,), True, 3.0)
+
+        self.assertEqual('REACHED', command.state)
+
+    def test_visual_avoidance_waits_until_camera_faces_route(self):
+        def turning_route(start, goal):
+            return (tuple(start), (0.0, -0.5), tuple(goal))
+        planner = VisualPathPlanner(route_provider=turning_route)
+        planner.set_goal((1.0, -0.5, 1.2), POSE)
+
+        command = planner.update(POSE, (OBSTACLE,), True, 3.0)
+
+        self.assertEqual('FOLLOW_ROUTE', command.state)
+        self.assertAlmostEqual(-1.5708, command.target_yaw, places=3)
+
+    def test_setpoint_ramp_limits_translation_lead_and_yaw_rate(self):
+        output = ramp_setpoint(
+            last=(0.0, 0.0, 1.2, 0.0),
+            desired=(1.0, -1.0, 1.2, -1.5708),
+            current=(0.0, 0.0, 1.2, 0.0), dt=0.10)
+
+        self.assertLessEqual((output[0] ** 2 + output[1] ** 2) ** 0.5,
+                             0.030001)
+        self.assertAlmostEqual(-0.06, output[3], places=6)
+
+    def test_fixed_wall_blocks_side_selection_that_would_cross_it(self):
+        planner = VisualPathPlanner(route_provider=straight_route)
+        planner.set_goal((2.0, 0.0, 1.2), POSE)
+        planner.clearance_override = (1.30, 1.30)
+        drive_to_select(planner)
+
+        command = planner.update(POSE, (OBSTACLE,), True, 1.5)
+
+        self.assertEqual('HOLD_UNSAFE', command.state)
+        self.assertEqual('no_safe_corridor', command.reason)
 
     def test_corridor_measurement_uses_field_boundary(self):
         left, right = corridor_clearances(

@@ -14,15 +14,15 @@ from firefighting_mission.state_machine import Inputs, MissionStateMachine
 
 
 GOALS = {
-    'ARM': (0.0, 0.0, 1.30),
-    'TAKEOFF': (0.0, 0.0, 1.30),
-    'SEARCH_HAZARD': (1.25, -0.10, 1.30),
-    'ALIGN_HAZARD': (1.25, -0.10, 1.30),
-    'DROP_FIRE': (1.25, -0.10, 1.30),
-    'SEARCH_PERSON': (2.65, -1.65, 1.30),
-    'ALIGN_PERSON': (2.65, -1.65, 1.30),
-    'DROP_RESCUE': (2.65, -1.65, 1.30),
-    'RETURN_HOME': (0.0, 0.0, 1.30),
+    'ARM': (0.0, 0.0, 1.20),
+    'TAKEOFF': (0.0, 0.0, 1.20),
+    'SEARCH_HAZARD': (1.25, -0.10, 1.20),
+    'ALIGN_HAZARD': (1.25, -0.10, 1.20),
+    'DROP_FIRE': (1.25, -0.10, 1.20),
+    'SEARCH_PERSON': (2.65, -1.65, 1.20),
+    'ALIGN_PERSON': (2.65, -1.65, 1.20),
+    'DROP_RESCUE': (2.65, -1.65, 1.20),
+    'RETURN_HOME': (0.0, 0.0, 1.20),
     'LAND': (0.0, 0.0, 0.08),
     'EMERGENCY_LAND': (0.0, 0.0, 0.08),
 }
@@ -60,7 +60,7 @@ class MissionManagerNode(object):
         rospy.Subscriber(self.mavros_prefix + '/local_position/pose', PoseStamped,
                          self._pose)
         rospy.Subscriber(self.mavros_prefix + '/state', State, self._state)
-        rospy.Subscriber('/fire_mission/nav_status', String, self._nav)
+        rospy.Subscriber('/fire_mission/path_status', String, self._nav)
         rospy.Subscriber('/fire_mission/safety_status', String, self._safety)
         rospy.Subscriber('/fire_mission/detection', TargetDetection,
                          self._detection)

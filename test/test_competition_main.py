@@ -164,7 +164,7 @@ class CompetitionMainTest(unittest.TestCase):
                            if node.attrib.get('type') == 'competition_main.py')
         self.assertEqual('true', competition.attrib.get('required'))
 
-    def test_takeoff_launch_uses_px4_native_iris_sdf_for_flight_smoke(self):
+    def test_takeoff_launch_uses_stereo_equipped_fire_iris(self):
         root = ET.parse(os.path.join(PROJECT_ROOT, 'launch',
                                      'competition_takeoff.launch')).getroot()
         sitl = next(node for node in root.findall('node')
@@ -173,7 +173,7 @@ class CompetitionMainTest(unittest.TestCase):
         self.assertIn('$(arg sdf)', sitl.attrib.get('args'))
         sdf_arg = next(arg for arg in root.findall('arg')
                        if arg.attrib.get('name') == 'sdf')
-        self.assertIn('Tools/sitl_gazebo/models/iris/iris.sdf',
+        self.assertIn('models/fire_iris/fire_iris.sdf',
                       sdf_arg.attrib.get('default'))
 
     def test_takeoff_launch_spawns_iris_above_field_floor_for_imu_startup(self):
@@ -186,6 +186,14 @@ class CompetitionMainTest(unittest.TestCase):
 
         self.assertEqual('0.2', spawn_z_arg.attrib.get('default'))
         self.assertIn('$(arg spawn_z)', sitl.attrib.get('args'))
+
+    def test_safety_takeover_is_gated_until_vehicle_is_airborne(self):
+        with open(os.path.join(PROJECT_ROOT, 'scripts',
+                               'competition_main.py'), 'r') as handle:
+            node = handle.read()
+
+        self.assertIn('self.state.armed and self.pose is not None', node)
+        self.assertIn("self.safety_action == 'LAND' and airborne", node)
 
 
 if __name__ == '__main__':

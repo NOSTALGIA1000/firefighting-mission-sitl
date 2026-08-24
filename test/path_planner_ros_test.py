@@ -81,8 +81,8 @@ class PathPlannerRosContractTest(unittest.TestCase):
 
         self._drive(self._pose(0.0, -1.0, 1.2), goal, 'REACHED')
         target = self.target.pose.position
-        self.assertEqual((0.0, -1.0, 1.2),
-                         (target.x, target.y, target.z))
+        self.assertEqual(1.2, target.z)
+        self.assertLessEqual(math.hypot(target.x, target.y + 1.0), 0.121)
 
 
 if __name__ == '__main__':

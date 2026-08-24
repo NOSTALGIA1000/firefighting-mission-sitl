@@ -36,6 +36,8 @@ class StereoModelTest(unittest.TestCase):
         self.assertEqual('0.20', sensor.find('camera/clip/near').text)
         self.assertEqual('4.00', sensor.find('camera/clip/far').text)
         self.assertEqual('15', sensor.find('update_rate').text)
+        self.assertEqual('320', sensor.find('camera/image/width').text)
+        self.assertEqual('180', sensor.find('camera/image/height').text)
 
     def test_sensor_mount_faces_forward(self):
         iris = ET.parse(os.path.join(PROJECT_ROOT, 'models', 'fire_iris',
@@ -48,7 +50,13 @@ class StereoModelTest(unittest.TestCase):
         self.assertIsNotNone(joint)
         self.assertEqual('fire_stereo_camera::link', joint.find('child').text)
         self.assertEqual('base_link', joint.find('parent').text)
-        self.assertEqual('0.16 0 0.03 0 0 0', include.find('pose').text)
+        self.assertEqual('0.32 0 0.03 0 0 0', include.find('pose').text)
+
+    def test_visual_sensor_does_not_shift_px4_airframe_inertia(self):
+        root = ET.parse(os.path.join(
+            PROJECT_ROOT, 'models', 'fire_stereo_camera', 'model.sdf')).getroot()
+
+        self.assertLess(float(root.find('.//link/inertial/mass').text), 0.001)
 
     def test_sitl_loader_exposes_gazebo_depth_plugin_dependencies(self):
         with open(os.path.join(PROJECT_ROOT, 'scripts', 'start_sitl.sh'),

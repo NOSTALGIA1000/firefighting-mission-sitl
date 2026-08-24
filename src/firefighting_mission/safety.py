@@ -19,11 +19,13 @@ class SafetyMonitor(object):
         self.boundary_limit = float(boundary_limit)
 
     def evaluate(self, pose_age, scan_age, roll, pitch, altitude,
-                 minimum_obstacle, boundary_margin):
+                 minimum_obstacle, boundary_margin, stereo_age=0.0):
         if pose_age > self.stale_land:
             return SafetyStatus('LAND', 'pose_stale')
         if scan_age > self.stale_land:
             return SafetyStatus('LAND', 'scan_stale')
+        if stereo_age > self.stale_land:
+            return SafetyStatus('LAND', 'stereo_stale')
         if abs(roll) > self.attitude_limit or abs(pitch) > self.attitude_limit:
             return SafetyStatus('LAND', 'attitude_limit')
         if altitude > self.altitude_limit:
@@ -36,4 +38,6 @@ class SafetyMonitor(object):
             return SafetyStatus('HOVER', 'pose_stale')
         if scan_age > self.stale_hover:
             return SafetyStatus('HOVER', 'scan_stale')
+        if stereo_age > self.stale_hover:
+            return SafetyStatus('HOVER', 'stereo_stale')
         return SafetyStatus('CLEAR', '')

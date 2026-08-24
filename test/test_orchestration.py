@@ -67,7 +67,30 @@ class OrchestrationTest(unittest.TestCase):
         self.assertIn('/iris_0/scan', topics)
         self.assertIn('/gazebo/link_states', topics)
         self.assertIn('/fire_mission/contacts', topics)
+        self.assertIn('/fire_mission/mission_view', topics)
+        self.assertIn('/fire_mission/obstacles', topics)
+        self.assertIn('/fire_mission/avoidance_status', topics)
+        self.assertIn('/fire_stereo/depth/image_raw', topics)
         self.assertNotIn('/iris_0/mavros/state', topics)
+
+    def test_launch_starts_visual_avoidance_chain(self):
+        root = ET.parse(os.path.join(PROJECT_ROOT, 'launch',
+                                     'firefighting.launch')).getroot()
+        types = [node.attrib.get('type') for node in root.findall('node')]
+
+        for expected in ('stereo_obstacle_node.py', 'path_planner.py',
+                         'competition_main.py', 'mission_overlay_node.py'):
+            self.assertIn(expected, types)
+        self.assertNotIn('navigator_node.py', types)
+        self.assertNotIn('mavros_bridge_node.py', types)
+
+    def test_airborne_mission_goals_use_constant_1_2_m_altitude(self):
+        with open(os.path.join(PROJECT_ROOT, 'scripts',
+                               'mission_manager_node.py'), 'r') as handle:
+            manager = handle.read()
+
+        self.assertNotIn('1.30', manager)
+        self.assertIn("'RETURN_HOME': (0.0, 0.0, 1.20)", manager)
 
     def test_completion_requires_recorder_ack_or_bounded_deadline(self):
         self.assertFalse(completion_should_shutdown(False, 4.9, 5.0))
@@ -146,10 +169,13 @@ class OrchestrationTest(unittest.TestCase):
         self.assertIn('/usr/lib/x86_64-linux-gnu/gazebo-9/plugins', wrapper)
         self.assertIn('GAZEBO_MODEL_PATH="$package_root/models:${GAZEBO_MODEL_PATH:-}"', wrapper)
         self.assertIn('mavros_posix_sitl.launch', wrapper)
-        self.assertIn('sdf="${4:-$package_root/models/fire_iris/fire_iris.sdf}"',
+        self.assertIn('default_sdf="$package_root/models/fire_iris/fire_iris.sdf"',
                       wrapper)
+        self.assertIn('sdf="${4:-$default_sdf}"', wrapper)
         self.assertIn('spawn_z="${5:-0.2}"', wrapper)
         self.assertIn('"z:=$spawn_z"', wrapper)
+        self.assertIn('case "$sdf" in __*:=*)', wrapper)
+        self.assertIn('case "$spawn_z" in __*:=*)', wrapper)
 
     def test_completion_waits_for_recorder_ack_and_bag_flush(self):
         with open(os.path.join(PROJECT_ROOT, 'scripts',
@@ -175,7 +201,7 @@ class OrchestrationTest(unittest.TestCase):
                           'navigator_node.py', 'safety_monitor_node.py',
                           'mission_recorder_node.py')]
 
-        self.assertEqual(3, len(scan_nodes))
+        self.assertEqual(2, len(scan_nodes))
         for node in scan_nodes:
             scan = node.find("param[@name='scan_topic']")
             self.assertIsNotNone(scan)

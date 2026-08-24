@@ -6,19 +6,70 @@
   <arg name="world" default="$(find firefighting_mission)/artifacts/$(arg seed)/firefighting.world"/>
   <arg name="mavros_prefix" default="/mavros"/>
   <arg name="scan_topic" default="/iris_0/scan"/>
+  <arg name="target_image_topic" default="/iris_0/camera/image_raw"/>
+  <arg name="stereo_input_mode" default="depth"/>
+  <arg name="depth_topic" default="/fire_stereo/depth/image_raw"/>
+  <arg name="camera_info_topic" default="/fire_stereo/depth/camera_info"/>
+  <arg name="points_topic" default="/fire_stereo/points"/>
+  <arg name="transit_altitude" default="1.2"/>
 
   <param name="/use_sim_time" value="true"/>
   <node pkg="firefighting_mission" type="start_sitl.sh" name="firefighting_sitl"
         args="$(arg seed) $(arg world) $(arg gui)" output="screen" required="true"/>
 
+  <group if="$(eval arg('stereo_input_mode') == 'raw_stereo')" ns="fire_stereo">
+    <node pkg="nodelet" type="nodelet" name="stereo_manager"
+          args="manager" output="screen"/>
+    <include file="$(find stereo_image_proc)/launch/stereo_image_proc.launch">
+      <arg name="manager" value="/fire_stereo/stereo_manager"/>
+      <arg name="left" value="left"/>
+      <arg name="right" value="right"/>
+      <arg name="approximate_sync" value="true"/>
+    </include>
+  </group>
+
+  <node pkg="firefighting_mission" type="stereo_obstacle_node.py"
+        name="stereo_obstacle_adapter" output="screen">
+    <param name="input_mode" value="$(arg stereo_input_mode)"/>
+    <param name="depth_topic" value="$(arg depth_topic)"/>
+    <param name="camera_info_topic" value="$(arg camera_info_topic)"/>
+    <param name="points_topic" value="$(arg points_topic)"/>
+    <param name="fallback_fx" value="190.0"/>
+    <param name="fallback_cx" value="159.5"/>
+    <param name="stale_seconds" value="0.75"/>
+  </node>
+  <node pkg="firefighting_mission" type="path_planner.py" name="path_planner" output="screen">
+    <param name="mavros_prefix" value="$(arg mavros_prefix)"/>
+    <param name="transit_altitude" value="$(arg transit_altitude)"/>
+  </node>
+  <node pkg="firefighting_mission" type="competition_main.py" name="competition_main"
+        output="screen" required="true">
+    <param name="mavros_prefix" value="$(arg mavros_prefix)"/>
+    <param name="takeoff_altitude" value="$(arg transit_altitude)"/>
+  </node>
   <node pkg="firefighting_mission" type="mission_manager_node.py" name="mission_manager"
-        output="screen" required="true"><param name="mavros_prefix" value="$(arg mavros_prefix)"/></node>
-  <node pkg="firefighting_mission" type="mavros_bridge_node.py" name="mavros_bridge" output="screen"><param name="mavros_prefix" value="$(arg mavros_prefix)"/></node>
-  <node pkg="firefighting_mission" type="navigator_node.py" name="navigator" output="screen"><param name="mavros_prefix" value="$(arg mavros_prefix)"/><param name="scan_topic" value="$(arg scan_topic)"/></node>
-  <node pkg="firefighting_mission" type="safety_monitor_node.py" name="safety_monitor" output="screen"><param name="mavros_prefix" value="$(arg mavros_prefix)"/><param name="scan_topic" value="$(arg scan_topic)"/></node>
-  <node pkg="firefighting_mission" type="target_detector_node.py" name="target_detector" output="screen"/>
-  <node pkg="firefighting_mission" type="payload_controller_node.py" name="payload_controller" output="screen"><param name="mavros_prefix" value="$(arg mavros_prefix)"/></node>
-  <node pkg="firefighting_mission" type="supply_drop.py" name="supply_drop" output="screen"><param name="mavros_prefix" value="$(arg mavros_prefix)"/></node>
+        output="screen" required="true">
+    <param name="mavros_prefix" value="$(arg mavros_prefix)"/>
+  </node>
+  <node pkg="firefighting_mission" type="safety_monitor_node.py" name="safety_monitor" output="screen">
+    <param name="mavros_prefix" value="$(arg mavros_prefix)"/>
+    <param name="scan_topic" value="$(arg scan_topic)"/>
+    <param name="stereo_stale_hover" value="0.75"/>
+    <param name="stereo_stale_land" value="2.0"/>
+  </node>
+  <node pkg="firefighting_mission" type="target_detector_node.py" name="target_detector" output="screen">
+    <param name="image_topic" value="$(arg target_image_topic)"/>
+  </node>
+  <node pkg="firefighting_mission" type="payload_controller_node.py" name="payload_controller" output="screen">
+    <param name="mavros_prefix" value="$(arg mavros_prefix)"/>
+  </node>
+  <node pkg="firefighting_mission" type="supply_drop.py" name="supply_drop" output="screen">
+    <param name="mavros_prefix" value="$(arg mavros_prefix)"/>
+  </node>
+  <node pkg="firefighting_mission" type="mission_overlay_node.py" name="mission_overlay" output="screen">
+    <param name="front_topic" value="/fire_stereo/rgb/image_raw"/>
+    <param name="target_topic" value="/fire_mission/annotated"/>
+  </node>
   <node pkg="firefighting_mission" type="mission_recorder_node.py" name="mission_recorder" output="screen">
     <param name="seed" value="$(arg seed)"/>
     <param name="record" value="$(arg record)"/>
