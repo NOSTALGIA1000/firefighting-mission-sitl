@@ -38,32 +38,42 @@ class PathPlannerRosContractTest(unittest.TestCase):
         message.pose.orientation.w = 1.0
         return message
 
-    def _drive(self, pose, expected_status, goal=None):
+    def _drive(self, pose, expected_status, expected_target, goal=None):
         deadline = rospy.Time.now() + rospy.Duration(8.0)
-        while self.status != expected_status and rospy.Time.now() < deadline:
+        while rospy.Time.now() < deadline:
             self.pose_pub.publish(pose)
             if goal is not None:
                 self.goal_pub.publish(goal)
+            if self.status == expected_status and self.target is not None:
+                target = self.target.pose.position
+                if (target.x, target.y, target.z) == expected_target:
+                    return target
             rospy.sleep(0.05)
         self.assertEqual(expected_status, self.status)
         self.assertIsNotNone(self.target)
-        return self.target.pose.position
+        target = self.target.pose.position
+        self.assertEqual(expected_target, (target.x, target.y, target.z))
+        return target
 
     def test_ordered_climb_cruise_descend_and_reached_targets(self):
         goal = self._pose(2.0, -1.0, 1.2)
-        target = self._drive(self._pose(0.0, 0.0, 1.2), 'CLIMB', goal)
+        target = self._drive(self._pose(0.0, 0.0, 1.2), 'CLIMB',
+                             (0.0, 0.0, 2.3), goal)
         self.assertEqual((0.0, 0.0, 2.3),
                          (target.x, target.y, target.z))
 
-        target = self._drive(self._pose(0.0, 0.0, 2.3), 'CRUISE')
+        target = self._drive(self._pose(0.0, 0.0, 2.3), 'CRUISE',
+                             (2.0, -1.0, 2.3))
         self.assertEqual((2.0, -1.0, 2.3),
                          (target.x, target.y, target.z))
 
-        target = self._drive(self._pose(2.0, -1.0, 2.3), 'DESCEND')
+        target = self._drive(self._pose(2.0, -1.0, 2.3), 'DESCEND',
+                             (2.0, -1.0, 1.2))
         self.assertEqual((2.0, -1.0, 1.2),
                          (target.x, target.y, target.z))
 
-        target = self._drive(self._pose(2.0, -1.0, 1.2), 'REACHED')
+        target = self._drive(self._pose(2.0, -1.0, 1.2), 'REACHED',
+                             (2.0, -1.0, 1.2))
         self.assertEqual((2.0, -1.0, 1.2),
                          (target.x, target.y, target.z))
 
