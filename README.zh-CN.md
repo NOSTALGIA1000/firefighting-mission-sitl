@@ -7,6 +7,7 @@
 小组成员第一次接手时，先阅读：
 
 - `docs/TEAM_HANDOFF.zh-CN.md`：运行环境、接手步骤、当前可用能力和待办事项。
+- `docs/TEAM_C_HANDOFF.zh-CN.md`：固定高度路径规划、双通道投放接口与演示命令。
 - `docs/CODE_INVENTORY_AND_PROGRESS.zh-CN.md`：完整代码清单、模块用途、验证记录和当前进展。
 
 ## 一键运行

@@ -46,6 +46,8 @@
 - `scripts/target_detector_node.py`：ROS 目标识别节点入口。
 - `scripts/payload_controller_node.py`：ROS 投放控制节点入口。
 - `scripts/mavros_bridge_node.py`：MAVROS 与现有 XTDrone 风格控制命令之间的桥接节点入口。
+- `scripts/path_planner.py`：分段固定高度路径 ROS 节点，输出内部位置设定点和阶段状态。
+- `scripts/supply_drop.py`：带对准、速度、高度和重复投放检查的高层投放服务。
 
 ### Python 核心逻辑
 
@@ -58,6 +60,8 @@
 - `src/firefighting_mission/payload.py`：消防物资和救援物资投放控制。
 - `src/firefighting_mission/scoring.py`：成绩计算、失败原因和原子化 `score.json` 输出。
 - `src/firefighting_mission/mavros_bridge.py`：将任务包控制命令转为 MAVROS 解锁、模式和降落接口。
+- `src/firefighting_mission/path_planner.py`：`CLIMB/CRUISE/DESCEND/REACHED` 分段路径逻辑。
+- `src/firefighting_mission/supply_drop.py`：双通道投放安全门控与失败重试语义。
 - `src/firefighting_mission/__init__.py`：Python 包初始化。
 
 ### C++ Gazebo 插件
@@ -80,6 +84,7 @@
 - `msg/TargetDetection.msg`：目标检测消息。
 - `msg/DropResult.msg`：投放结果消息。
 - `msg/MissionEvent.msg`：任务事件消息。
+- `srv/DropSupply.srv`：消防物资通道 1、救援物资通道 2 的投放服务。
 
 ### 测试代码
 
@@ -92,6 +97,8 @@
 - `test/test_payload.py` 与 `test/payload_drop.test`：投放逻辑和 Gazebo 插件测试入口。
 - `test/test_scoring.py`：成绩计算和 `score.json` 输出测试。
 - `test/test_package_metadata.py`：包元数据、脚本安装和资源安装测试。
+- `test/test_path_planner.py` 与 `test/path_planner.test`：分段路径逻辑和 ROS 接口测试。
+- `test/test_supply_drop.py` 与 `test/payload_drop.test`：高层安全门控和 Gazebo 物理分离测试。
 
 ### 设计和实施文档
 
@@ -147,13 +154,22 @@
 
 已能在 VM 中打开新的 Gazebo 图形仿真场景，用于查看修正后的消防场地。用户已看到 Gazebo 界面，并正在检查视角和场地布局。
 
+### 队员 C：路径规划与物资投放
+
+已完成固定高度分段策略，默认先升至 `2.30 m`，再水平飞至目标上方，最后下降到任务高度。路径设定点经 `competition_main.py` 接入 OFFBOARD 控制，避免多个节点同时向 MAVROS 发布位置设定点。
+
+已完成双通道 ROS 投放服务与 Gazebo 模型分离插件。高层服务检查对准、水平速度不超过 `0.10 m/s`、高度位于 `1.15-1.45 m`、通道未重复使用；低层服务执行舱门动作、关节分离和载荷重力恢复。完整接口见 `docs/TEAM_C_HANDOFF.zh-CN.md`。
+
 ## 验证记录
 
 已完成的验证：
 
-- Windows 主机 Python 测试：`67/67 PASS`
-- VM Python 2.7 测试：`67/67 PASS`
+- Windows 主机 Python 测试：`99/99 PASS`
+- VM Python 2.7 测试：`99/99 PASS`
 - VM `catkin_make`：通过
+- VM Gazebo 物理投放服务测试：通过
+- VM 路径 ROS 合约测试：通过
+- VM 原生 PX4 Iris 分段点到点实飞：通过；阶段顺序为 `CLIMB -> CRUISE -> DESCEND -> REACHED`
 - 生成世界文件检查：通过
 - 场地关键内容检查：通过
   - `fixed_obstacle_2`
@@ -163,7 +179,7 @@
 
 ## 当前未完成事项
 
-- 完整自主任务飞行尚未最终通过。此前排查到 PX4/MAVROS 能连接并进入 OFFBOARD，但机体物理起飞行为仍需继续调试。
+- PX4/MAVROS 的 OFFBOARD 起飞与队员 C 分段点到点飞行已经通过；完整自主任务仍需由状态机生成比赛航点并串联识别、两次投放、返航和降落。
 - 当前阶段重点已切换为：先完成并人工确认 Gazebo 场地环境。
 - GitHub 上传已完成，仓库为 `https://github.com/NOSTALGIA1000/firefighting-mission-sitl`，当前分支为 `feature/firefighting-sitl`。
 

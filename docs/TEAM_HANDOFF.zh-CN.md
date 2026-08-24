@@ -13,11 +13,13 @@
 - 危险品区、人员救助区、随机障碍、固定障碍、安全网已生成。
 - 主机和 VM 的单元测试已通过。
 - VM 中可以打开 Gazebo 图形场景检查场地。
+- PX4 Iris 已完成 OFFBOARD 起飞和固定高度分段点到点实飞。
+- 双通道 Gazebo 物资分离服务已通过物理测试。
 
 当前不能承诺已经完成的部分：
 
 - 完整自主飞行任务还没有最终跑通。
-- 飞控进入 OFFBOARD 后，机体物理起飞行为仍需继续排查。
+- 状态机尚未自动生成完整比赛航点并串联识别、两次投放和返航。
 - 450 实机或最终比赛机体替换还没有完成硬件级验证。
 
 ## GitHub 仓库
@@ -151,6 +153,15 @@ rosrun firefighting_mission run_mission.sh 4501
 - `src/firefighting_mission/mavros_bridge.py`
 - `scripts/mavros_bridge_node.py`
 
+队员 C 路径和投放：
+
+- `src/firefighting_mission/path_planner.py`
+- `scripts/path_planner.py`
+- `src/firefighting_mission/supply_drop.py`
+- `scripts/supply_drop.py`
+- `srv/DropSupply.srv`
+- 详细接口见 `docs/TEAM_C_HANDOFF.zh-CN.md`
+
 记录和评分：
 
 - `src/firefighting_mission/scoring.py`
@@ -173,9 +184,12 @@ Gazebo 投放插件：
 
 最近一次整理时的验证结果：
 
-- Windows 主机 Python 测试：`67/67 PASS`
-- VM Python 2.7 测试：`67/67 PASS`
+- Windows 主机 Python 测试：`99/99 PASS`
+- VM Python 2.7 测试：`99/99 PASS`
 - VM `catkin_make`：通过
+- VM 路径 ROS 合约测试：通过
+- VM 原生 PX4 Iris 分段点到点实飞：通过
+- VM Gazebo 双通道投放物理测试：通过
 - 生成世界文件检查：通过
 - Gazebo 图形场景可以打开
 
@@ -192,8 +206,8 @@ Gazebo 投放插件：
 建议后续成员按这个顺序继续：
 
 1. 人工确认 Gazebo 场地和赛题图纸一致。
-2. 继续排查 PX4/Gazebo 机体起飞物理行为。
-3. 跑通完整自主任务。
+2. 由状态机向 `/fire_mission/point_goal` 发布比赛航点，并设置 `/fire_mission/aligned`。
+3. 串联识别、两次高层投放、返航和降落，跑通完整自主任务。
 4. 替换或适配最终 450 机体。
 5. 固化比赛运行脚本和最终演示流程。
 
