@@ -118,7 +118,7 @@ def plan_route(start, goal, resolution=0.10, inflation=0.45,
         raise ValueError('start_outside_field')
     if not _inside_field(goal, inflation):
         raise ValueError('goal_outside_field')
-    if not point_is_free(start, inflation, dynamic_circles):
+    if not point_is_free(start, inflation):
         raise ValueError('start_blocked')
     if not point_is_free(goal, inflation, dynamic_circles):
         raise ValueError('goal_blocked')

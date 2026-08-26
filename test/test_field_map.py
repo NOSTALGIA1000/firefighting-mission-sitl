@@ -92,6 +92,17 @@ class FieldMapTest(unittest.TestCase):
                                y_value - circle[1]),
                     circle[2] + 0.44)
 
+    def test_route_can_escape_dynamic_inflation_at_current_pose(self):
+        circle = (0.48, -1.41, 0.15)
+
+        route = plan_route(
+            (0.21, -1.93), (1.50, -1.45),
+            dynamic_circles=(circle,))
+
+        self.assertEqual((0.21, -1.93), route[0])
+        self.assertEqual((1.50, -1.45), route[-1])
+        self.assertGreater(len(route), 2)
+
 
 if __name__ == '__main__':
     unittest.main()
