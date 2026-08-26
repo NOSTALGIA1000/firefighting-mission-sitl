@@ -5,7 +5,7 @@ from collections import namedtuple
 
 from firefighting_mission.field_map import (plan_route,
                                             point_is_free,
-                                            point_matches_known_static)
+                                            point_matches_field_boundary)
 
 
 PlanCommand = namedtuple(
@@ -17,7 +17,7 @@ class VisualPlannerConfig(object):
     def __init__(self, altitude=1.20, altitude_tolerance=0.10,
                  trigger_range=1.00, minimum_corridor=0.90,
                  aircraft_radius=0.20, external_clearance=0.25,
-                 pass_distance=0.55, waypoint_tolerance=0.12,
+                 pass_distance=0.80, waypoint_tolerance=0.12,
                  observation_frames=3, side_hysteresis=0.15,
                  yaw_alignment_tolerance=0.35, lateral_trigger=0.55,
                  sensor_forward_offset=0.0,
@@ -115,9 +115,16 @@ def avoidance_path_is_free(start, side, passing, rejoin):
 
 
 class VisualPathPlanner(object):
-    def __init__(self, config=None, route_provider=None, path_validator=None):
+    def __init__(self, config=None, route_provider=None, path_validator=None,
+                 dynamic_route_provider=None):
         self.config = config or VisualPlannerConfig()
         self.route_provider = route_provider or plan_route
+        if dynamic_route_provider is not None:
+            self.dynamic_route_provider = dynamic_route_provider
+        elif route_provider is None:
+            self.dynamic_route_provider = self._dynamic_route
+        else:
+            self.dynamic_route_provider = None
         self.path_validator = path_validator or avoidance_path_is_free
         self.goal = None
         self.route = ()
@@ -135,6 +142,11 @@ class VisualPathPlanner(object):
         self.route_yaw = 0.0
         self.interrupted_state = None
         self.clearance_override = None
+        self.temporary_obstacles = ()
+
+    @staticmethod
+    def _dynamic_route(start, goal, circles):
+        return plan_route(start, goal, dynamic_circles=circles)
 
     def set_goal(self, goal, pose):
         self.goal = (float(goal[0]), float(goal[1]), self.config.altitude)
@@ -149,6 +161,21 @@ class VisualPathPlanner(object):
     @staticmethod
     def _horizontal_distance(first, second):
         return math.hypot(first[0] - second[0], first[1] - second[1])
+
+    def _remember_obstacle(self, circle):
+        circles = list(self.temporary_obstacles)
+        for index, current in enumerate(circles):
+            separation = math.hypot(
+                circle[0] - current[0], circle[1] - current[1])
+            if separation <= max(circle[2], current[2]):
+                circles[index] = (
+                    (circle[0] + current[0]) / 2.0,
+                    (circle[1] + current[1]) / 2.0,
+                    max(circle[2], current[2]))
+                self.temporary_obstacles = tuple(circles)
+                return
+        circles.append(tuple(float(value) for value in circle))
+        self.temporary_obstacles = tuple(circles)
 
     def _command(self, state, target, yaw, reason=''):
         return PlanCommand(
@@ -172,7 +199,7 @@ class VisualPathPlanner(object):
                                  self.config.sensor_forward_offset))
             surface = _body_to_world(pose, shifted.forward_m,
                                      shifted.left_m)
-            if point_matches_known_static(
+            if point_matches_field_boundary(
                     surface, self.config.known_static_tolerance):
                 continue
             if (shifted.forward_m > 0.0 and
@@ -196,6 +223,22 @@ class VisualPathPlanner(object):
                                     waypoint[0] - pose[0])
         return self._command('FOLLOW_ROUTE', waypoint, self.route_yaw)
 
+    def _skip_passed_waypoints(self, pose):
+        while 0 < self.waypoint_index < len(self.route):
+            previous = self.route[self.waypoint_index - 1]
+            waypoint = self.route[self.waypoint_index]
+            segment_x = waypoint[0] - previous[0]
+            segment_y = waypoint[1] - previous[1]
+            segment_squared = segment_x * segment_x + segment_y * segment_y
+            if segment_squared <= 1e-9:
+                self.waypoint_index += 1
+                continue
+            progress = ((pose[0] - previous[0]) * segment_x +
+                        (pose[1] - previous[1]) * segment_y)
+            if progress < segment_squared:
+                break
+            self.waypoint_index += 1
+
     def _select_side(self, pose):
         if self.active_obstacle is None:
             self.state = 'FOLLOW_ROUTE'
@@ -210,10 +253,12 @@ class VisualPathPlanner(object):
                             self.config.pass_distance)
 
         def candidate(sign):
-            obstacle_edge = (self.active_obstacle.left_edge_m if sign > 0.0
-                             else abs(self.active_obstacle.right_edge_m))
-            lateral = sign * (obstacle_edge + self.config.aircraft_radius +
-                              self.config.external_clearance)
+            clearance = (self.config.aircraft_radius +
+                         self.config.external_clearance)
+            if sign > 0.0:
+                lateral = self.active_obstacle.left_edge_m + clearance
+            else:
+                lateral = self.active_obstacle.right_edge_m - clearance
             side_xy = _body_to_world(pose, 0.0, lateral)
             pass_xy = _body_to_world(pose, forward_to_clear, lateral)
             rejoin_xy = _body_to_world(pose, forward_to_clear, 0.0)
@@ -244,6 +289,15 @@ class VisualPathPlanner(object):
             side = 'LEFT'
         self.selected_side = side
         self.last_selected_side = side
+        obstacle_center = _body_to_world(
+            pose, self.active_obstacle.forward_m,
+            self.active_obstacle.left_m)
+        obstacle_radius = max(
+            0.10,
+            abs(self.active_obstacle.left_edge_m -
+                self.active_obstacle.right_edge_m) / 2.0)
+        self._remember_obstacle(
+            (obstacle_center[0], obstacle_center[1], obstacle_radius))
         selected = left_candidate if side == 'LEFT' else right_candidate
         self.side_target, self.pass_target, self.rejoin_target = selected
         self.state = 'SIDESTEP'
@@ -270,7 +324,9 @@ class VisualPathPlanner(object):
                 return route_command
             if abs(angle_difference(pose[3], route_command.target_yaw)) > \
                     self.config.yaw_alignment_tolerance:
-                return route_command
+                return self._command(
+                    'FOLLOW_ROUTE', pose[:2], route_command.target_yaw,
+                    'aligning_route_yaw')
             if (nearest is not None and
                     nearest.nearest_range_m < self.config.trigger_range):
                 self.active_obstacle = nearest
@@ -309,6 +365,19 @@ class VisualPathPlanner(object):
 
         if self.state == 'REJOIN':
             if self._horizontal_distance(pose, self.rejoin_target) <= self.config.waypoint_tolerance:
+                if self.dynamic_route_provider is not None:
+                    try:
+                        self.route = tuple(self.dynamic_route_provider(
+                            pose[:2], self.goal[:2],
+                            self.temporary_obstacles))
+                    except ValueError:
+                        self.state = 'HOLD_UNSAFE'
+                        return self._hold(
+                            pose, 'dynamic_route_unreachable',
+                            remember=False)
+                    self.waypoint_index = 1 if len(self.route) > 1 else 0
+                else:
+                    self._skip_passed_waypoints(pose)
                 self.state = 'FOLLOW_ROUTE'
                 self.selected_side = ''
                 self.active_obstacle = None
@@ -316,7 +385,10 @@ class VisualPathPlanner(object):
             return self._command('REJOIN', self.rejoin_target, self.route_yaw)
 
         if self.state == 'HOLD_UNSAFE':
-            if nearest is None or nearest.nearest_range_m >= self.config.trigger_range:
+            if nearest is None:
+                return self._hold(
+                    pose, 'obstacle_temporarily_unseen', remember=False)
+            if nearest.nearest_range_m >= self.config.trigger_range:
                 self.state = 'FOLLOW_ROUTE'
                 self.selected_side = ''
                 self.active_obstacle = None
