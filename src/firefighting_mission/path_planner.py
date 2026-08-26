@@ -5,7 +5,7 @@ from collections import namedtuple
 
 from firefighting_mission.field_map import (plan_route,
                                             point_is_free,
-                                            point_matches_field_boundary)
+                                            point_matches_known_static)
 
 
 PlanCommand = namedtuple(
@@ -57,7 +57,7 @@ def ramp_setpoint(last, desired, current, dt, horizontal_speed=0.30,
     lead_x = x_value - current[0]
     lead_y = y_value - current[1]
     lead = math.hypot(lead_x, lead_y)
-    if lead > maximum_lead:
+    if maximum_lead is not None and lead > float(maximum_lead):
         lead_scale = float(maximum_lead) / lead
         x_value = current[0] + lead_x * lead_scale
         y_value = current[1] + lead_y * lead_scale
@@ -143,6 +143,7 @@ class VisualPathPlanner(object):
         self.interrupted_state = None
         self.clearance_override = None
         self.temporary_obstacles = ()
+        self.hold_target = None
 
     @staticmethod
     def _dynamic_route(start, goal, circles):
@@ -157,6 +158,7 @@ class VisualPathPlanner(object):
         self.selected_side = ''
         self.active_obstacle = None
         self.interrupted_state = None
+        self.hold_target = None
 
     @staticmethod
     def _horizontal_distance(first, second):
@@ -187,7 +189,16 @@ class VisualPathPlanner(object):
     def _hold(self, pose, reason, remember=True):
         if remember and self.state != 'HOLD_UNSAFE':
             self.interrupted_state = self.state
-        return self._command('HOLD_UNSAFE', pose[:2], pose[3], reason)
+        return self._command(
+            'HOLD_UNSAFE', self._lock_hold(pose), pose[3], reason)
+
+    def _lock_hold(self, pose):
+        if self.hold_target is None:
+            self.hold_target = (float(pose[0]), float(pose[1]))
+        return self.hold_target
+
+    def _clear_hold(self):
+        self.hold_target = None
 
     def _nearest_obstacle(self, pose, obstacles):
         candidates = []
@@ -199,7 +210,7 @@ class VisualPathPlanner(object):
                                  self.config.sensor_forward_offset))
             surface = _body_to_world(pose, shifted.forward_m,
                                      shifted.left_m)
-            if point_matches_field_boundary(
+            if point_matches_known_static(
                     surface, self.config.known_static_tolerance):
                 continue
             if (shifted.forward_m > 0.0 and
@@ -242,6 +253,7 @@ class VisualPathPlanner(object):
     def _select_side(self, pose):
         if self.active_obstacle is None:
             self.state = 'FOLLOW_ROUTE'
+            self._clear_hold()
             return self._follow_route(pose)
         if self.clearance_override is None:
             clearances = corridor_clearances(pose, self.active_obstacle)
@@ -301,6 +313,7 @@ class VisualPathPlanner(object):
         selected = left_candidate if side == 'LEFT' else right_candidate
         self.side_target, self.pass_target, self.rejoin_target = selected
         self.state = 'SIDESTEP'
+        self._clear_hold()
         return self._command('SIDESTEP', self.side_target, self.route_yaw)
 
     def update(self, pose, obstacles, perception_ready, now):
@@ -316,28 +329,34 @@ class VisualPathPlanner(object):
         if self.interrupted_state is not None:
             self.state = self.interrupted_state
             self.interrupted_state = None
+            self._clear_hold()
 
         nearest = self._nearest_obstacle(pose, obstacles)
         if self.state == 'FOLLOW_ROUTE':
             route_command = self._follow_route(pose)
             if route_command.state == 'REACHED':
+                self._clear_hold()
                 return route_command
             if abs(angle_difference(pose[3], route_command.target_yaw)) > \
                     self.config.yaw_alignment_tolerance:
                 return self._command(
-                    'FOLLOW_ROUTE', pose[:2], route_command.target_yaw,
+                    'FOLLOW_ROUTE', self._lock_hold(pose),
+                    route_command.target_yaw,
                     'aligning_route_yaw')
+            self._clear_hold()
             if (nearest is not None and
                     nearest.nearest_range_m < self.config.trigger_range):
                 self.active_obstacle = nearest
                 self.state = 'BRAKE'
-                return self._command('BRAKE', pose[:2], pose[3])
+                return self._command(
+                    'BRAKE', self._lock_hold(pose), pose[3])
             return route_command
 
         if self.state == 'BRAKE':
             self.state = 'OBSERVE'
             self.observation_count = 0
-            return self._command('OBSERVE', pose[:2], pose[3])
+            return self._command(
+                'OBSERVE', self._lock_hold(pose), pose[3])
 
         if self.state == 'OBSERVE':
             if nearest is not None:
@@ -345,8 +364,10 @@ class VisualPathPlanner(object):
             self.observation_count += 1
             if self.observation_count >= self.config.observation_frames:
                 self.state = 'SELECT_SIDE'
-                return self._command('SELECT_SIDE', pose[:2], pose[3])
-            return self._command('OBSERVE', pose[:2], pose[3])
+                return self._command(
+                    'SELECT_SIDE', self._lock_hold(pose), pose[3])
+            return self._command(
+                'OBSERVE', self._lock_hold(pose), pose[3])
 
         if self.state == 'SELECT_SIDE':
             return self._select_side(pose)
@@ -392,6 +413,7 @@ class VisualPathPlanner(object):
                 self.state = 'FOLLOW_ROUTE'
                 self.selected_side = ''
                 self.active_obstacle = None
+                self._clear_hold()
                 return self._follow_route(pose)
             self.active_obstacle = nearest
             self.state = 'SELECT_SIDE'

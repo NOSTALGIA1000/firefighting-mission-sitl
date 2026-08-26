@@ -85,10 +85,14 @@ class PathPlannerNode(object):
               max(0.0, now - self.last_output_time))
         desired = (command.target[0], command.target[1], command.target[2],
                    command.target_yaw)
+        locked_xy = (command.state in (
+            'BRAKE', 'OBSERVE', 'SELECT_SIDE', 'HOLD_UNSAFE') or
+            command.reason == 'aligning_route_yaw')
         self.output_setpoint = ramp_setpoint(
             self.output_setpoint, desired, pose, dt,
             horizontal_speed=rospy.get_param('~maximum_horizontal_speed', 0.30),
-            maximum_lead=rospy.get_param('~maximum_setpoint_lead', 0.12),
+            maximum_lead=(None if locked_xy else rospy.get_param(
+                '~maximum_setpoint_lead', 0.12)),
             yaw_rate=rospy.get_param('~maximum_yaw_rate', 0.60))
         self.last_output_time = now
         target = PoseStamped()

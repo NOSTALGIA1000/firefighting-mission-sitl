@@ -100,7 +100,7 @@ class VisualPathPlannerTest(unittest.TestCase):
 
         self.assertEqual('FOLLOW_ROUTE', command.state)
 
-    def test_fixed_board_seen_in_flight_corridor_still_triggers_visual_brake(self):
+    def test_known_fixed_board_is_left_to_global_route(self):
         pose = (0.0, -0.20, 1.20, 0.0)
         fixed_board = ObstacleClusterData(
             0.65, 0.0, 0.63, 0.05, -0.05, 1.0)
@@ -111,7 +111,7 @@ class VisualPathPlannerTest(unittest.TestCase):
 
         command = planner.update(pose, (fixed_board,), True, 1.0)
 
-        self.assertEqual('BRAKE', command.state)
+        self.assertEqual('FOLLOW_ROUTE', command.state)
 
     def test_unknown_cylinder_still_triggers_after_camera_offset_transform(self):
         pose = (0.0, -1.45, 1.20, 0.0)
@@ -247,6 +247,14 @@ class VisualPathPlannerTest(unittest.TestCase):
         self.assertEqual(POSE[:3], command.target)
         self.assertEqual('perception_not_ready', command.reason)
 
+    def test_visual_loss_latches_first_hold_position(self):
+        planner = planner_with_goal()
+        planner.update(POSE, (), False, 2.0)
+
+        command = planner.update((0.2, -0.3, 1.2, 0.0), (), False, 2.1)
+
+        self.assertEqual(POSE[:3], command.target)
+
     def test_altitude_error_holds_xy_and_recovers_12(self):
         command = planner_with_goal().update(
             (0.3, -0.2, 1.36, 0.0), (), True, 2.0)
@@ -328,6 +336,27 @@ class VisualPathPlannerTest(unittest.TestCase):
         self.assertEqual(POSE[:3], command.target)
         self.assertAlmostEqual(-1.5708, command.target_yaw, places=3)
 
+    def test_route_yaw_alignment_latches_first_xy(self):
+        def turning_route(start, goal):
+            return (tuple(start), (0.0, -0.5), tuple(goal))
+        planner = VisualPathPlanner(route_provider=turning_route)
+        planner.set_goal((1.0, -0.5, 1.2), POSE)
+        planner.update(POSE, (), True, 3.0)
+
+        command = planner.update((0.2, -0.3, 1.2, -0.1), (), True, 3.1)
+
+        self.assertEqual(POSE[:3], command.target)
+
+    def test_brake_and_observe_latch_detection_xy(self):
+        planner = planner_with_goal()
+        brake = planner.update(POSE, (OBSTACLE,), True, 1.0)
+
+        observe = planner.update(
+            (0.2, -0.3, 1.2, 0.0), (OBSTACLE,), True, 1.1)
+
+        self.assertEqual(POSE[:3], brake.target)
+        self.assertEqual(POSE[:3], observe.target)
+
     def test_setpoint_ramp_limits_translation_lead_and_yaw_rate(self):
         output = ramp_setpoint(
             last=(0.0, 0.0, 1.2, 0.0),
@@ -337,6 +366,15 @@ class VisualPathPlannerTest(unittest.TestCase):
         self.assertLessEqual((output[0] ** 2 + output[1] ** 2) ** 0.5,
                              0.030001)
         self.assertAlmostEqual(-0.06, output[3], places=6)
+
+    def test_setpoint_ramp_can_keep_latched_hold_during_pose_drift(self):
+        output = ramp_setpoint(
+            last=(0.0, 0.0, 1.2, 0.0),
+            desired=(0.0, 0.0, 1.2, -1.0),
+            current=(0.3, -0.4, 1.2, -0.1), dt=0.10,
+            maximum_lead=None)
+
+        self.assertEqual((0.0, 0.0), output[:2])
 
     def test_fixed_wall_blocks_side_selection_that_would_cross_it(self):
         planner = VisualPathPlanner(
