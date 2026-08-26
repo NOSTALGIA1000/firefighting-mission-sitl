@@ -1,10 +1,10 @@
 # 当前阶段交接（先读此文件）
 
-更新时间：2026-08-24
+更新时间：2026-08-26
 
 ## 一句话状态
 
-赛场、PX4/MAVROS 自动起飞悬停、双通道物资投放、固定地图 A*、双目深度障碍提取、1.2 米视觉绕桩状态机均已实现；完整绕桩实飞尚未通过，当前卡点是圆柱暂时离开视野后错误恢复直飞，存在碰撞风险。
+赛场、PX4/MAVROS 自动起飞悬停、双通道物资投放、固定地图 A*、双目深度障碍提取、1.2 米视觉绕桩状态机均已实现；视觉圆柱记忆、动态地图重规划、深度分层和悬停点锁存已加入。单次种子 1 曾完整通过，但重复 SITL 尚不稳定，不能视为验收完成。
 
 ## 仓库与环境
 
@@ -62,8 +62,8 @@ git checkout feature/firefighting-sitl
 
 ### 当前自动测试基线
 
-- 当前完整 Python 2.7 测试：140/140 通过（含固定地图融合回归）。
-- 路径规划专项测试：19/19 通过。
+- 本轮相关纯逻辑测试：47/47 通过（路径规划 30、场地图 10、双目障碍 7）。
+- 上一阶段完整 Python 2.7 测试基线：140/140 通过；本轮修改后尚未重跑全部 140 项。
 - `catkin_make`：最近一次通过。
 - `rostest firefighting_mission path_planner.test`：最近一次通过。
 
@@ -71,21 +71,24 @@ git checkout feature/firefighting-sitl
 
 ## 当前未解决问题
 
-### P0：绕桩实飞会撞圆柱
+### P0：绕桩实飞重复性不足
 
-种子 1 直接穿越测试观测：
-
-- 进入过 `BRAKE / OBSERVE / SELECT_SIDE / HOLD_UNSAFE`。
-- 尚未稳定进入 `SIDESTEP / PASS / REJOIN`。
-- 一次运行发生与 `random_cylinder_1` 的实体接触。
-- 规划器在圆柱离开相机视野后恢复 `FOLLOW_ROUTE`，继续直飞。
-- 高度大致保持在 1.2m附近，不是问题主因。
-
-已定位并修正一层原因：双目曾把固定挡板或安全网误当随机障碍。当前代码加入：
+当前代码已加入：
 
 - 相机前置偏移补偿，仿真默认 `0.32m`。
 - 固定地图表面过滤，避免已知墙体重复触发局部绕障。
-- 视野横向触发范围收紧为 `±0.55m`。
+- 视觉圆柱短时记忆，并写入动态障碍地图供 A* 重规划。
+- 动态重规划起点逃逸，避免起点落入膨胀区后无路可走。
+- 地面/固定结构/圆柱候选分层，减少深度误检。
+- `BRAKE/OBSERVE/SELECT_SIDE/HOLD_UNSAFE` 悬停位置锁存，避免悬停目标跟随机体漂移。
+- 视野横向触发范围为 `±0.55m`，近距触发为 `1.00m`。
+
+验证结果：
+
+- 种子 1 曾一次完整经过 `SIDESTEP / PASS / REJOIN` 并通过 smoke test。
+- 重复运行仍会因圆柱较远时未触发，随后进入相机侧盲区而失败。
+- 将局部触发范围简单放宽，会生成过长侧移路线，并可能撞固定障碍 3/4 或南侧安全网；该实验已回退。
+- 当前建议架构：远处稳定视觉圆柱写入动态地图并立即触发全局 A*；近处突发障碍继续使用局部状态机。该拆分尚未实现。
 
 仍需解决：`HOLD_UNSAFE` 后不能仅因目标暂时离开视野就恢复直飞。应要求重新观测确认、完成安全侧选择，或保持悬停等待。
 
@@ -106,7 +109,7 @@ git checkout feature/firefighting-sitl
 1. 阅读 `docs/superpowers/specs/2026-08-24-stereo-visual-avoidance-design.md`。
 2. 跑纯逻辑与 ROS 合约测试，确认基线。
 3. 用种子 1 复现绕桩，查看 `artifacts/avoidance_matrix/1/smoke.json` 的 `event_trace`。
-4. 修复视觉丢失后的恢复条件；先让种子 1 无碰撞通过。
+4. 实现“远距动态 A*、近距局部绕障”职责拆分；不要再次只放宽局部触发阈值。
 5. 再跑种子 `1、4、10、2`，覆盖四种圆柱位置组合。
 6. 增加双目断流测试，确认规划器悬停、安全模块最终降落。
 7. 最后恢复完整任务链验证，不要同时调识别与绕桩。
@@ -140,6 +143,13 @@ rostest firefighting_mission visual_avoidance_smoke.test seed:=1
 cat /home/ss/catkin_ws/src/firefighting_mission/artifacts/avoidance_matrix/1/smoke.json
 ```
 
+离线分析控制、障碍和规划决策：
+
+```bash
+cd /home/ss/catkin_ws/src/firefighting_mission
+PYTHONPATH=src python scripts/analyze_control_bag.py /tmp/control_diag2.bag
+```
+
 四种位置矩阵（仅在种子 1 通过后执行）：
 
 ```bash
@@ -157,6 +167,7 @@ rosrun firefighting_mission run_avoidance_matrix.sh
 - `src/firefighting_mission/stereo_obstacles.py`：障碍簇提取。
 - `test/visual_avoidance_smoke.py`：SITL 绕桩取证测试。
 - `scripts/run_avoidance_matrix.sh`：四种随机圆柱组合验收入口。
+- `scripts/analyze_control_bag.py`：离线对齐模式、位姿、设定点、障碍世界坐标和触发判定。
 - `docs/TEAM_C_HANDOFF.zh-CN.md`：队员 C 详细接口。
 
 ## 提交原则
