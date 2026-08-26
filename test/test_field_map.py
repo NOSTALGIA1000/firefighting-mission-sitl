@@ -1,6 +1,7 @@
 from __future__ import division, print_function
 
 import inspect
+import math
 import os
 import sys
 import unittest
@@ -63,6 +64,33 @@ class FieldMapTest(unittest.TestCase):
         self.assertEqual((1.25, -0.10), route[-1])
         self.assertTrue(all(point_is_free(point, inflation=0.45)
                             for point in route))
+
+    def test_dynamic_circle_blocks_inflated_points(self):
+        circles = ((0.70, -1.45, 0.10),)
+
+        self.assertFalse(point_is_free(
+            (0.20, -1.45), inflation=0.45,
+            dynamic_circles=circles))
+        self.assertTrue(point_is_free(
+            (0.00, -2.40), inflation=0.45,
+            dynamic_circles=circles))
+
+    def test_route_avoids_dynamic_circle(self):
+        circle = (0.70, -1.45, 0.10)
+
+        route = plan_route(
+            (0.00, -1.90), (1.50, -1.45),
+            dynamic_circles=(circle,))
+
+        for first, second in zip(route, route[1:]):
+            for index in range(21):
+                ratio = index / 20.0
+                x_value = first[0] + (second[0] - first[0]) * ratio
+                y_value = first[1] + (second[1] - first[1]) * ratio
+                self.assertGreater(
+                    math.hypot(x_value - circle[0],
+                               y_value - circle[1]),
+                    circle[2] + 0.44)
 
 
 if __name__ == '__main__':

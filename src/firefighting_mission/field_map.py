@@ -26,9 +26,18 @@ def _inside_board(point, obstacle, inflation):
             abs(local_width) <= width / 2.0 + inflation)
 
 
-def point_is_free(point, inflation=0.45):
+def _inside_dynamic_circle(point, circle, inflation):
+    center_x, center_y, radius = circle
+    return math.hypot(point[0] - center_x,
+                      point[1] - center_y) <= radius + inflation
+
+
+def point_is_free(point, inflation=0.45, dynamic_circles=()):
     inflation = float(inflation)
     if not _inside_field(point, inflation):
+        return False
+    if any(_inside_dynamic_circle(point, circle, inflation)
+           for circle in dynamic_circles):
         return False
     return not any(_inside_board(point, obstacle, inflation)
                    for obstacle in FIXED_OBSTACLES)
@@ -56,6 +65,16 @@ def point_matches_known_static(point, tolerance=0.18):
         if math.hypot(outside_length, outside_width) <= tolerance:
             return True
     return False
+
+
+def point_matches_field_boundary(point, tolerance=0.18):
+    """Return whether a measured surface belongs to the outer safety net."""
+    x_value, y_value = point
+    tolerance = float(tolerance)
+    return (abs(x_value - FIELD_BOUNDS[0]) <= tolerance or
+            abs(x_value - FIELD_BOUNDS[1]) <= tolerance or
+            abs(y_value - FIELD_BOUNDS[2]) <= tolerance or
+            abs(y_value - FIELD_BOUNDS[3]) <= tolerance)
 
 
 def simplify_route(points):
@@ -89,7 +108,8 @@ def _reconstruct(parents, node):
     return result
 
 
-def plan_route(start, goal, resolution=0.10, inflation=0.45):
+def plan_route(start, goal, resolution=0.10, inflation=0.45,
+               dynamic_circles=()):
     start = (float(start[0]), float(start[1]))
     goal = (float(goal[0]), float(goal[1]))
     resolution = float(resolution)
@@ -98,9 +118,9 @@ def plan_route(start, goal, resolution=0.10, inflation=0.45):
         raise ValueError('start_outside_field')
     if not _inside_field(goal, inflation):
         raise ValueError('goal_outside_field')
-    if not point_is_free(start, inflation):
+    if not point_is_free(start, inflation, dynamic_circles):
         raise ValueError('start_blocked')
-    if not point_is_free(goal, inflation):
+    if not point_is_free(goal, inflation, dynamic_circles):
         raise ValueError('goal_blocked')
     if resolution <= 0.0:
         raise ValueError('invalid_resolution')
@@ -122,7 +142,7 @@ def plan_route(start, goal, resolution=0.10, inflation=0.45):
 
     def valid(node):
         return (0 <= node[0] <= columns and 0 <= node[1] <= rows and
-                point_is_free(world(node), inflation))
+                point_is_free(world(node), inflation, dynamic_circles))
 
     def nearest_valid(node, exact_point):
         if valid(node):
