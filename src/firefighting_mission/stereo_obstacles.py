@@ -33,17 +33,31 @@ def _summarize(entries, min_samples):
     )
 
 
-def _cluster_horizontal_samples(samples, bin_width=0.08, min_samples=8):
+def _cluster_horizontal_samples(samples, bin_width=0.08, min_samples=8,
+                                depth_bin_width=0.15):
     bins = {}
     for forward, left in samples:
-        key = int(math.floor(left / float(bin_width)))
+        key = (int(math.floor(left / float(bin_width))),
+               int(math.floor(forward / float(depth_bin_width))))
         bins.setdefault(key, []).append((forward, left))
     groups = []
-    for key in sorted(bins):
-        if groups and key <= groups[-1][-1][0] + 1:
-            groups[-1].append((key, bins[key]))
-        else:
-            groups.append([(key, bins[key])])
+    remaining = set(bins)
+    while remaining:
+        seed = min(remaining)
+        remaining.remove(seed)
+        pending = [seed]
+        group = []
+        while pending:
+            key = pending.pop()
+            group.append((key, bins[key]))
+            for lateral_delta in (-1, 0, 1):
+                for depth_delta in (-1, 0, 1):
+                    neighbor = (key[0] + lateral_delta,
+                                key[1] + depth_delta)
+                    if neighbor in remaining:
+                        remaining.remove(neighbor)
+                        pending.append(neighbor)
+        groups.append(group)
     clusters = []
     for group in groups:
         cluster = _summarize(group, min_samples)

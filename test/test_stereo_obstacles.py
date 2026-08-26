@@ -35,6 +35,18 @@ class StereoObstacleTest(unittest.TestCase):
 
         self.assertEqual((), clusters_from_depth(depth, 80.0, 40.0))
 
+    def test_adjacent_near_wall_and_far_background_are_separate_clusters(self):
+        depth = np.empty((60, 80), dtype=np.float32)
+        depth.fill(np.nan)
+        depth[15:48, 0:40] = 0.60
+        depth[15:48, 40:80] = 2.40
+
+        clusters = clusters_from_depth(depth, fx=80.0, cx=40.0)
+
+        self.assertEqual(2, len(clusters))
+        self.assertAlmostEqual(0.60, clusters[0].forward_m, places=2)
+        self.assertAlmostEqual(2.40, clusters[1].forward_m, places=2)
+
     def test_point_cloud_uses_forward_left_up_convention(self):
         points = [(1.0, 0.20, 0.0), (1.0, 0.21, 0.02),
                   (1.02, 0.19, -0.02)] * 4
