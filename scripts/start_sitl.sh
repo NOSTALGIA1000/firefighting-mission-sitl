@@ -11,6 +11,7 @@ spawn_z="${5:-0.2}"
 case "$sdf" in __*:=*) sdf="$default_sdf" ;; esac
 case "$spawn_z" in __*:=*) spawn_z="0.2" ;; esac
 px4_root="${PX4_FIRMWARE_DIR:-/home/ss/PX4_Firmware}"
+export DISPLAY="${DISPLAY:-:0}"
 export ROS_PACKAGE_PATH="$px4_root:$px4_root/Tools/sitl_gazebo:${ROS_PACKAGE_PATH:-}"
 gazebo_system_plugin_path="/usr/lib/x86_64-linux-gnu/gazebo-9/plugins"
 export GAZEBO_PLUGIN_PATH="/opt/ros/melodic/lib:$gazebo_system_plugin_path:${GAZEBO_PLUGIN_PATH:-}"

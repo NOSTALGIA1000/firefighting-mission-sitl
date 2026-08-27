@@ -214,6 +214,12 @@ class OrchestrationTest(unittest.TestCase):
         self.assertNotIn('fcu_url:=tcp://localhost:4560', wrapper)
         self.assertNotIn('respawn_mavros:=true', wrapper)
 
+    def test_sitl_wrapper_uses_vm_display_when_ssh_has_no_display(self):
+        with open(os.path.join(PROJECT_ROOT, 'scripts', 'start_sitl.sh'), 'r') as handle:
+            wrapper = handle.read()
+
+        self.assertIn('export DISPLAY="${DISPLAY:-:0}"', wrapper)
+
     def test_active_avoidance_has_no_random_cylinder_truth_input(self):
         paths = (
             'scripts/path_planner.py',
