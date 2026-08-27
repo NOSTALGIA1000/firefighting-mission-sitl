@@ -13,6 +13,7 @@
 - VM：Ubuntu 18.04、ROS Melodic、Gazebo 9、PX4 SITL、MAVROS
 - VM 工作区：`/home/ss/catkin_ws`
 - ROS 包：`/home/ss/catkin_ws/src/firefighting_mission`
+- VM ROS 网络：`~/.bashrc` 已修成动态 `ROS_IP=$(hostname -I | awk '{print $1}')`，`ROS_MASTER_URI=http://127.0.0.1:11311`；旧配置备份为 `~/.bashrc.codex-rosnet-20260827.bak`。
 
 首次接手：
 
@@ -66,7 +67,7 @@ git checkout feature/firefighting-sitl
 - Windows 内置 Python 完整 discover：149 项中 147 项执行通过，2 项因本机缺 `cv2` 无法导入；需在 VM 的 ROS/Python2 环境重跑完整基线。
 - 上一阶段完整 Python 2.7 测试基线：140/140 通过；本轮修改后尚未在 VM 重跑全部 140 项。
 - `catkin_make`：最近一次通过。
-- `rostest firefighting_mission path_planner.test`：最近一次通过。
+- `rostest firefighting_mission path_planner.test`：2026-08-27 在 VM 通过；测试前修复了旧网段 ROS 环境变量。
 
 不要把“四种随机圆柱实飞矩阵”写成已通过；它仍是当前验收目标。
 
