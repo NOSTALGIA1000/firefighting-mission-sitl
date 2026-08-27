@@ -209,6 +209,41 @@ class VisualPathPlannerTest(unittest.TestCase):
         self.assertEqual(1, len(planner.temporary_obstacles))
         self.assertAlmostEqual(1.40, planner.temporary_obstacles[0][0])
 
+    def test_far_cylinder_memory_uses_physical_radius_not_projected_width(self):
+        calls = []
+        wide_far_obstacle = OBSTACLE._replace(
+            forward_m=1.40, nearest_range_m=1.35,
+            left_edge_m=1.20, right_edge_m=-1.20)
+
+        def dynamic_route(start, goal, circles):
+            calls.append(tuple(circles))
+            return (tuple(start), tuple(goal))
+
+        planner = planner_with_goal(dynamic_route_provider=dynamic_route)
+
+        planner.update(POSE, (wide_far_obstacle,), True, 1.0)
+        planner.update(POSE, (wide_far_obstacle,), True, 1.1)
+
+        self.assertEqual(1, len(calls))
+        self.assertAlmostEqual(0.10, calls[0][0][2])
+
+    def test_dynamic_replan_failure_latches_hold_instead_of_resuming_far_route(self):
+        far_obstacle = OBSTACLE._replace(
+            forward_m=1.40, nearest_range_m=1.35)
+
+        def unreachable(_start, _goal, _circles):
+            raise ValueError('route_unreachable')
+
+        planner = planner_with_goal(dynamic_route_provider=unreachable)
+
+        planner.update(POSE, (far_obstacle,), True, 1.0)
+        failed = planner.update(POSE, (far_obstacle,), True, 1.1)
+        following = planner.update(POSE, (far_obstacle,), True, 1.2)
+
+        self.assertEqual('HOLD_UNSAFE', failed.state)
+        self.assertEqual('HOLD_UNSAFE', following.state)
+        self.assertEqual('dynamic_route_unreachable', following.reason)
+
     def test_dynamic_replan_failure_holds(self):
         def unreachable(_start, _goal, _circles):
             raise ValueError('route_unreachable')

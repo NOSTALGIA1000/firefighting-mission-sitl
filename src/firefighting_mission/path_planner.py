@@ -23,7 +23,8 @@ class VisualPlannerConfig(object):
                  sensor_forward_offset=0.0,
                  known_static_tolerance=0.18,
                  global_replan_range=2.00, global_replan_frames=2,
-                 global_replan_merge_distance=0.35):
+                 global_replan_merge_distance=0.35,
+                 dynamic_obstacle_radius=0.10):
         self.altitude = float(altitude)
         self.altitude_tolerance = float(altitude_tolerance)
         self.trigger_range = float(trigger_range)
@@ -41,6 +42,7 @@ class VisualPlannerConfig(object):
         self.global_replan_range = float(global_replan_range)
         self.global_replan_frames = int(global_replan_frames)
         self.global_replan_merge_distance = float(global_replan_merge_distance)
+        self.dynamic_obstacle_radius = float(dynamic_obstacle_radius)
 
 
 def angle_difference(first, second):
@@ -151,6 +153,7 @@ class VisualPathPlanner(object):
         self.hold_target = None
         self.global_obstacle_candidate = None
         self.global_observation_count = 0
+        self.hold_reason = ''
 
     @staticmethod
     def _dynamic_route(start, goal, circles):
@@ -166,6 +169,7 @@ class VisualPathPlanner(object):
         self.active_obstacle = None
         self.interrupted_state = None
         self.hold_target = None
+        self.hold_reason = ''
         self._reset_global_candidate()
 
     @staticmethod
@@ -193,6 +197,10 @@ class VisualPathPlanner(object):
                      abs(obstacle.left_edge_m - obstacle.right_edge_m) / 2.0)
         return (center[0], center[1], radius)
 
+    def _dynamic_obstacle_circle(self, pose, obstacle):
+        center = _body_to_world(pose, obstacle.forward_m, obstacle.left_m)
+        return (center[0], center[1], self.config.dynamic_obstacle_radius)
+
     def _reset_global_candidate(self):
         self.global_obstacle_candidate = None
         self.global_observation_count = 0
@@ -219,7 +227,7 @@ class VisualPathPlanner(object):
                 obstacle.nearest_range_m >= self.config.global_replan_range):
             self._reset_global_candidate()
             return None
-        circle = self._obstacle_circle(pose, obstacle)
+        circle = self._dynamic_obstacle_circle(pose, obstacle)
         self._track_global_candidate(circle)
         if self.global_observation_count < self.config.global_replan_frames:
             return None
@@ -246,6 +254,7 @@ class VisualPathPlanner(object):
     def _hold(self, pose, reason, remember=True):
         if remember and self.state != 'HOLD_UNSAFE':
             self.interrupted_state = self.state
+        self.hold_reason = reason
         return self._command(
             'HOLD_UNSAFE', self._lock_hold(pose), pose[3], reason)
 
@@ -256,6 +265,7 @@ class VisualPathPlanner(object):
 
     def _clear_hold(self):
         self.hold_target = None
+        self.hold_reason = ''
 
     def _nearest_obstacle(self, pose, obstacles):
         candidates = []
@@ -461,6 +471,9 @@ class VisualPathPlanner(object):
             return self._command('REJOIN', self.rejoin_target, self.route_yaw)
 
         if self.state == 'HOLD_UNSAFE':
+            if self.hold_reason == 'dynamic_route_unreachable':
+                return self._hold(
+                    pose, 'dynamic_route_unreachable', remember=False)
             if nearest is None:
                 return self._hold(
                     pose, 'obstacle_temporarily_unseen', remember=False)
