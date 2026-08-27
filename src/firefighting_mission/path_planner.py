@@ -21,7 +21,9 @@ class VisualPlannerConfig(object):
                  observation_frames=3, side_hysteresis=0.15,
                  yaw_alignment_tolerance=0.35, lateral_trigger=0.55,
                  sensor_forward_offset=0.0,
-                 known_static_tolerance=0.18):
+                 known_static_tolerance=0.18,
+                 global_replan_range=2.00, global_replan_frames=2,
+                 global_replan_merge_distance=0.35):
         self.altitude = float(altitude)
         self.altitude_tolerance = float(altitude_tolerance)
         self.trigger_range = float(trigger_range)
@@ -36,6 +38,9 @@ class VisualPlannerConfig(object):
         self.lateral_trigger = float(lateral_trigger)
         self.sensor_forward_offset = float(sensor_forward_offset)
         self.known_static_tolerance = float(known_static_tolerance)
+        self.global_replan_range = float(global_replan_range)
+        self.global_replan_frames = int(global_replan_frames)
+        self.global_replan_merge_distance = float(global_replan_merge_distance)
 
 
 def angle_difference(first, second):
@@ -144,6 +149,8 @@ class VisualPathPlanner(object):
         self.clearance_override = None
         self.temporary_obstacles = ()
         self.hold_target = None
+        self.global_obstacle_candidate = None
+        self.global_observation_count = 0
 
     @staticmethod
     def _dynamic_route(start, goal, circles):
@@ -159,6 +166,7 @@ class VisualPathPlanner(object):
         self.active_obstacle = None
         self.interrupted_state = None
         self.hold_target = None
+        self._reset_global_candidate()
 
     @staticmethod
     def _horizontal_distance(first, second):
@@ -178,6 +186,55 @@ class VisualPathPlanner(object):
                 return
         circles.append(tuple(float(value) for value in circle))
         self.temporary_obstacles = tuple(circles)
+
+    def _obstacle_circle(self, pose, obstacle):
+        center = _body_to_world(pose, obstacle.forward_m, obstacle.left_m)
+        radius = max(0.10,
+                     abs(obstacle.left_edge_m - obstacle.right_edge_m) / 2.0)
+        return (center[0], center[1], radius)
+
+    def _reset_global_candidate(self):
+        self.global_obstacle_candidate = None
+        self.global_observation_count = 0
+
+    def _track_global_candidate(self, circle):
+        if self.global_obstacle_candidate is None:
+            self.global_obstacle_candidate = circle
+            self.global_observation_count = 1
+            return
+        separation = math.hypot(circle[0] - self.global_obstacle_candidate[0],
+                                circle[1] - self.global_obstacle_candidate[1])
+        if separation <= self.config.global_replan_merge_distance:
+            self.global_obstacle_candidate = (
+                (circle[0] + self.global_obstacle_candidate[0]) / 2.0,
+                (circle[1] + self.global_obstacle_candidate[1]) / 2.0,
+                max(circle[2], self.global_obstacle_candidate[2]))
+            self.global_observation_count += 1
+            return
+        self.global_obstacle_candidate = circle
+        self.global_observation_count = 1
+
+    def _maybe_replan_for_far_obstacle(self, pose, obstacle):
+        if (self.dynamic_route_provider is None or obstacle is None or
+                obstacle.nearest_range_m >= self.config.global_replan_range):
+            self._reset_global_candidate()
+            return None
+        circle = self._obstacle_circle(pose, obstacle)
+        self._track_global_candidate(circle)
+        if self.global_observation_count < self.config.global_replan_frames:
+            return None
+        self._remember_obstacle(self.global_obstacle_candidate)
+        try:
+            self.route = tuple(self.dynamic_route_provider(
+                pose[:2], self.goal[:2], self.temporary_obstacles))
+        except ValueError:
+            self.state = 'HOLD_UNSAFE'
+            self._reset_global_candidate()
+            return self._hold(
+                pose, 'dynamic_route_unreachable', remember=False)
+        self.waypoint_index = 1 if len(self.route) > 1 else 0
+        self._reset_global_candidate()
+        return self._follow_route(pose)
 
     def _command(self, state, target, yaw, reason=''):
         return PlanCommand(
@@ -301,15 +358,8 @@ class VisualPathPlanner(object):
             side = 'LEFT'
         self.selected_side = side
         self.last_selected_side = side
-        obstacle_center = _body_to_world(
-            pose, self.active_obstacle.forward_m,
-            self.active_obstacle.left_m)
-        obstacle_radius = max(
-            0.10,
-            abs(self.active_obstacle.left_edge_m -
-                self.active_obstacle.right_edge_m) / 2.0)
         self._remember_obstacle(
-            (obstacle_center[0], obstacle_center[1], obstacle_radius))
+            self._obstacle_circle(pose, self.active_obstacle))
         selected = left_candidate if side == 'LEFT' else right_candidate
         self.side_target, self.pass_target, self.rejoin_target = selected
         self.state = 'SIDESTEP'
@@ -346,10 +396,15 @@ class VisualPathPlanner(object):
             self._clear_hold()
             if (nearest is not None and
                     nearest.nearest_range_m < self.config.trigger_range):
+                self._reset_global_candidate()
                 self.active_obstacle = nearest
                 self.state = 'BRAKE'
                 return self._command(
                     'BRAKE', self._lock_hold(pose), pose[3])
+            dynamic_command = self._maybe_replan_for_far_obstacle(
+                pose, nearest)
+            if dynamic_command is not None:
+                return dynamic_command
             return route_command
 
         if self.state == 'BRAKE':

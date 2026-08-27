@@ -187,6 +187,28 @@ class VisualPathPlannerTest(unittest.TestCase):
         self.assertEqual(1, len(calls))
         self.assertEqual(planner.temporary_obstacles, calls[0][2])
 
+    def test_stable_far_cylinder_replans_before_local_trigger(self):
+        calls = []
+        far_obstacle = OBSTACLE._replace(
+            forward_m=1.40, nearest_range_m=1.35)
+
+        def dynamic_route(start, goal, circles):
+            calls.append((tuple(start), tuple(goal), tuple(circles)))
+            return (tuple(start), (0.0, 0.50), tuple(goal))
+
+        planner = planner_with_goal(dynamic_route_provider=dynamic_route)
+
+        first = planner.update(POSE, (far_obstacle,), True, 1.0)
+        self.assertEqual(0, len(calls))
+        second = planner.update(POSE, (far_obstacle,), True, 1.1)
+
+        self.assertEqual('FOLLOW_ROUTE', first.state)
+        self.assertEqual('FOLLOW_ROUTE', second.state)
+        self.assertEqual((0.0, 0.50, 1.2), second.target)
+        self.assertEqual(1, len(calls))
+        self.assertEqual(1, len(planner.temporary_obstacles))
+        self.assertAlmostEqual(1.40, planner.temporary_obstacles[0][0])
+
     def test_dynamic_replan_failure_holds(self):
         def unreachable(_start, _goal, _circles):
             raise ValueError('route_unreachable')
