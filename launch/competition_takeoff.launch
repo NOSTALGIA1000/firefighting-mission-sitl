@@ -6,7 +6,9 @@
   <arg name="spawn_z" default="0.2"/>
   <arg name="mavros_prefix" default="/mavros"/>
   <arg name="takeoff_altitude" default="1.2"/>
+  <arg name="prestream_count" default="120"/>
   <arg name="enable_path_planner" default="true"/>
+  <arg name="use_gazebo_ground_truth" default="true"/>
   <arg name="stereo_input_mode" default="depth"/>
   <arg name="depth_topic" default="/fire_stereo/depth/image_raw"/>
   <arg name="camera_info_topic" default="/fire_stereo/depth/camera_info"/>
@@ -21,12 +23,15 @@
         output="screen" required="true">
     <param name="mavros_prefix" value="$(arg mavros_prefix)"/>
     <param name="takeoff_altitude" value="$(arg takeoff_altitude)"/>
+    <param name="prestream_count" value="$(arg prestream_count)"/>
+    <param name="use_gazebo_ground_truth" value="$(arg use_gazebo_ground_truth)"/>
   </node>
 
   <node pkg="firefighting_mission" type="path_planner.py" name="path_planner"
         if="$(arg enable_path_planner)" output="screen">
     <param name="mavros_prefix" value="$(arg mavros_prefix)"/>
     <param name="transit_altitude" value="$(arg takeoff_altitude)"/>
+    <param name="use_gazebo_ground_truth" value="$(arg use_gazebo_ground_truth)"/>
   </node>
 
   <node pkg="firefighting_mission" type="stereo_obstacle_node.py"

@@ -9,8 +9,9 @@ import unittest
 import rospkg
 import rospy
 import rostest
-from gazebo_msgs.msg import ContactsState
+from gazebo_msgs.msg import ContactsState, ModelStates
 from geometry_msgs.msg import PoseStamped
+from mavros_msgs.msg import State
 from std_msgs.msg import String
 
 from firefighting_mission.msg import AvoidanceStatus, ObstacleArray
@@ -32,7 +33,16 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
         self.event_trace = []
         self.last_avoidance_state = ''
         self.states = set()
+        self.reasons = set()
         self.collision = False
+        self.first_collision_pose = None
+        self.gazebo_pose = None
+        self.first_collision_gazebo_pose = None
+        self.last_setpoint = None
+        self.first_collision_setpoint = None
+        self.first_collision_controller_state = None
+        self.fcu_mode = ''
+        self.fcu_armed = False
         self.transit = False
         self.altitudes = []
         self.goal_pub = rospy.Publisher('/fire_mission/point_goal', PoseStamped,
@@ -45,6 +55,11 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
         rospy.Subscriber('/fire_mission/obstacles', ObstacleArray,
                          self._obstacles)
         rospy.Subscriber('/mavros/local_position/pose', PoseStamped, self._pose)
+        rospy.Subscriber('/mavros/setpoint_position/local', PoseStamped,
+                         self._setpoint)
+        rospy.Subscriber('/mavros/state', State, self._fcu_state)
+        rospy.Subscriber('/gazebo/model_states', ModelStates,
+                         self._model_states)
 
     def _controller(self, message):
         self.controller_state = message.data
@@ -70,14 +85,37 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
             self.last_avoidance_state = message.state
         if self.transit:
             self.states.add(message.state)
+            if message.reason:
+                self.reasons.add(message.reason)
 
     def _contacts(self, message):
-        self.collision = (self.collision or
-                          contacts_indicate_collision(message.states))
+        colliding = contacts_indicate_collision(message.states)
+        if colliding and not self.collision:
+            self.first_collision_pose = self.last_pose
+            self.first_collision_gazebo_pose = self.gazebo_pose
+            self.first_collision_setpoint = self.last_setpoint
+            self.first_collision_controller_state = self.controller_state
+        self.collision = self.collision or colliding
         for state in message.states:
             pair = (state.collision1_name, state.collision2_name)
             if pair not in self.contact_pairs:
                 self.contact_pairs.append(pair)
+
+    def _fcu_state(self, message):
+        self.fcu_mode = message.mode
+        self.fcu_armed = bool(message.armed)
+
+    def _setpoint(self, message):
+        point = message.pose.position
+        self.last_setpoint = (point.x, point.y, point.z)
+
+    def _model_states(self, message):
+        try:
+            index = message.name.index('iris_0')
+        except ValueError:
+            return
+        point = message.pose[index].position
+        self.gazebo_pose = (point.x, point.y, point.z)
 
     def _obstacles(self, message):
         self.obstacles = [
@@ -127,6 +165,13 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
                 left_previous_reached = True
             if left_previous_reached and self.path_state == 'REACHED':
                 return
+            if self.collision:
+                self.fail(
+                    'collision_before_goal mavros=%r gazebo=%r mode=%s '
+                    'armed=%s contacts=%r' %
+                    (self.first_collision_pose,
+                     self.first_collision_gazebo_pose, self.fcu_mode,
+                     self.fcu_armed, self.contact_pairs))
             rate.sleep()
         self.fail('goal_not_reached state=%s reason=%s pose=%r controller=%s' %
                   (self.path_state, self.avoidance_reason, self.last_pose,
@@ -141,6 +186,7 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
         evidence = {
             'seed': self.seed,
             'states': sorted(self.states),
+            'reasons': sorted(self.reasons),
             'collision': self.collision,
             'minimum_transit_altitude': (min(self.altitudes) if
                                          self.altitudes else None),
@@ -156,6 +202,13 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
             'clearances': self.clearances,
             'obstacles': self.obstacles,
             'contact_pairs': self.contact_pairs,
+            'first_collision_pose': self.first_collision_pose,
+            'first_collision_gazebo_pose': self.first_collision_gazebo_pose,
+            'first_collision_setpoint': self.first_collision_setpoint,
+            'first_collision_controller_state': (
+                self.first_collision_controller_state),
+            'fcu_mode': self.fcu_mode,
+            'fcu_armed': self.fcu_armed,
             'event_trace': self.event_trace,
         }
         with open(os.path.join(output_dir, 'smoke.json'), 'w') as handle:
@@ -165,18 +218,21 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
         self._wait(lambda: self.controller_state == 'HOVER', 35.0,
                    'offboard_hover')
         self.states.clear()
+        self.reasons.clear()
         self.altitudes = []
         self.transit = True
-        self._drive(self._goal(1.50, -1.45), 55.0)
+        self._drive(self._goal(1.50, -1.45), 150.0)
         self.transit = False
 
-        required = set(('BRAKE', 'OBSERVE', 'SELECT_SIDE', 'SIDESTEP',
-                        'PASS', 'REJOIN'))
+        required = set(('FOLLOW_ROUTE', 'REACHED'))
         self.assertTrue(self.states.issuperset(required), sorted(self.states))
+        self.assertIn('dynamic_route_replanned', self.reasons)
         self.assertFalse(self.collision)
         self.assertTrue(self.altitudes)
         self.assertLessEqual(max(self.altitudes), 1.30)
         self.assertGreaterEqual(min(self.altitudes), 1.10)
+        self.assertTrue(all(not math.isnan(value) and not math.isinf(value)
+                            for value in self.last_pose))
         self.assertEqual('REACHED', self.path_state)
 
 

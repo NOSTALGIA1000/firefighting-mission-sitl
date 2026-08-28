@@ -4,7 +4,8 @@ from __future__ import print_function
 ALIGNMENT_PHASES = frozenset((
     'ALIGN_HAZARD', 'DROP_FIRE', 'ALIGN_PERSON', 'DROP_RESCUE',
 ))
-MISSION_OBSTACLE_PREFIXES = ('fixed_obstacle_', 'random_cylinder_')
+MISSION_OBSTACLE_PREFIXES = (
+    'fixed_obstacle_', 'random_cylinder_', 'safety_net_')
 
 
 def validated_alignment(phase, detection_confirmed, nav_status):

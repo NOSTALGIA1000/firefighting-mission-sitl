@@ -58,6 +58,14 @@ class StereoModelTest(unittest.TestCase):
 
         self.assertLess(float(root.find('.//link/inertial/mass').text), 0.001)
 
+    def test_sitl_map_frame_disables_gps_random_walk(self):
+        root = ET.parse(os.path.join(
+            PROJECT_ROOT, 'models', 'fire_iris', 'fire_iris.sdf')).getroot()
+        gps = root.find(".//plugin[@name='gps_plugin']")
+
+        self.assertIsNotNone(gps)
+        self.assertEqual('0', gps.find('gpsNoise').text)
+
     def test_sitl_loader_exposes_gazebo_depth_plugin_dependencies(self):
         with open(os.path.join(PROJECT_ROOT, 'scripts', 'start_sitl.sh'),
                   'r') as handle:

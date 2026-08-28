@@ -4,6 +4,7 @@ from __future__ import division, print_function
 import math
 
 import rospy
+from gazebo_msgs.msg import ModelStates
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import Imu
 from mavros_msgs.msg import State
@@ -13,6 +14,15 @@ from std_msgs.msg import String
 from firefighting_mission.competition_main import (CompetitionMain,
                                                     PositionSetpoint,
                                                     select_active_setpoints)
+from firefighting_mission.path_planner import map_target_to_local
+
+
+def quaternion_yaw(orientation):
+    numerator = 2.0 * (orientation.w * orientation.z +
+                       orientation.x * orientation.y)
+    denominator = 1.0 - 2.0 * (orientation.y * orientation.y +
+                               orientation.z * orientation.z)
+    return math.atan2(numerator, denominator)
 
 
 class CompetitionMainNode(object):
@@ -26,7 +36,12 @@ class CompetitionMainNode(object):
         )
         self.state = State()
         self.pose = None
+        self.map_pose = None
         self.imu = None
+        self.use_gazebo_ground_truth = rospy.get_param(
+            '~use_gazebo_ground_truth', False)
+        self.gazebo_model_name = rospy.get_param(
+            '~gazebo_model_name', 'iris_0')
         self.path_setpoint = None
         self.path_control_enabled = False
         self.terminal_command = ''
@@ -50,6 +65,9 @@ class CompetitionMainNode(object):
                          self._flight_command)
         rospy.Subscriber('/fire_mission/safety_status', String,
                          self._safety_status)
+        if self.use_gazebo_ground_truth:
+            rospy.Subscriber('/gazebo/model_states', ModelStates,
+                             self._model_states)
         self.timer = rospy.Timer(rospy.Duration(0.05), self._tick)
 
     def _state(self, message):
@@ -61,15 +79,27 @@ class CompetitionMainNode(object):
     def _imu(self, message):
         self.imu = message
 
+    def _model_states(self, message):
+        try:
+            index = message.name.index(self.gazebo_model_name)
+        except ValueError:
+            return
+        value = message.pose[index]
+        self.map_pose = (
+            value.position.x, value.position.y, 0.0,
+            quaternion_yaw(value.orientation))
+
+    @staticmethod
+    def _pose_tuple(message):
+        point = message.pose.position
+        return (point.x, point.y, point.z,
+                quaternion_yaw(message.pose.orientation))
+
     def _path_setpoint(self, message):
         point = message.pose.position
-        orientation = message.pose.orientation
-        numerator = 2.0 * (orientation.w * orientation.z +
-                           orientation.x * orientation.y)
-        denominator = 1.0 - 2.0 * (orientation.y * orientation.y +
-                                   orientation.z * orientation.z)
         self.path_setpoint = PositionSetpoint(
-            point.x, point.y, point.z, math.atan2(numerator, denominator))
+            point.x, point.y, point.z,
+            quaternion_yaw(message.pose.orientation))
 
     def _flight_command(self, message):
         command = message.data.strip().upper()
@@ -84,14 +114,14 @@ class CompetitionMainNode(object):
             self.terminal_command = 'AUTO.LAND'
         elif self.safety_action in ('HOVER', 'RETREAT') and airborne:
             point = self.pose.pose.position
-            orientation = self.pose.pose.orientation
-            numerator = 2.0 * (orientation.w * orientation.z +
-                               orientation.x * orientation.y)
-            denominator = 1.0 - 2.0 * (orientation.y * orientation.y +
-                                       orientation.z * orientation.z)
-            self.path_setpoint = PositionSetpoint(
-                point.x, point.y, point.z,
-                math.atan2(numerator, denominator))
+            if self.use_gazebo_ground_truth and self.map_pose is not None:
+                self.path_setpoint = PositionSetpoint(
+                    self.map_pose[0], self.map_pose[1], point.z,
+                    self.map_pose[3])
+            else:
+                self.path_setpoint = PositionSetpoint(
+                    point.x, point.y, point.z,
+                    quaternion_yaw(self.pose.pose.orientation))
             self.path_control_enabled = True
 
     def _altitude(self):
@@ -100,14 +130,24 @@ class CompetitionMainNode(object):
         return self.pose.pose.position.z
 
     def _publish_setpoint(self, point):
+        published = point
+        if self.use_gazebo_ground_truth:
+            if self.map_pose is None or self.pose is None:
+                return
+            values = map_target_to_local(
+                (point.x, point.y, point.z, point.yaw),
+                (self.map_pose[0], self.map_pose[1],
+                 self.pose.pose.position.z, self.map_pose[3]),
+                self._pose_tuple(self.pose))
+            published = PositionSetpoint(*values)
         pose = PoseStamped()
         pose.header.stamp = rospy.Time.now()
         pose.header.frame_id = 'map'
-        pose.pose.position.x = point.x
-        pose.pose.position.y = point.y
-        pose.pose.position.z = point.z
-        pose.pose.orientation.z = math.sin(point.yaw / 2.0)
-        pose.pose.orientation.w = math.cos(point.yaw / 2.0)
+        pose.pose.position.x = published.x
+        pose.pose.position.y = published.y
+        pose.pose.position.z = published.z
+        pose.pose.orientation.z = math.sin(published.yaw / 2.0)
+        pose.pose.orientation.w = math.cos(published.yaw / 2.0)
         self.setpoint_pub.publish(pose)
 
     def _tick(self, _event):
@@ -124,6 +164,9 @@ class CompetitionMainNode(object):
                 self.arm(False)
             except rospy.ServiceException as exc:
                 rospy.logwarn_throttle(1.0, 'disarming failed: %s', exc)
+            return
+        if self.use_gazebo_ground_truth and self.map_pose is None:
+            self.phase_pub.publish('WAIT_MAP')
             return
         outputs = self.controller.tick(
             rospy.Time.now().to_sec(),

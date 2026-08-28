@@ -77,21 +77,41 @@ def point_matches_field_boundary(point, tolerance=0.18):
             abs(y_value - FIELD_BOUNDS[3]) <= tolerance)
 
 
-def simplify_route(points):
+def _segment_is_free(first, second, inflation, dynamic_circles,
+                     sample_step=0.025):
+    distance = math.hypot(second[0] - first[0], second[1] - first[1])
+    sample_count = max(1, int(math.ceil(distance / float(sample_step))))
+    for index in range(1, sample_count + 1):
+        ratio = index / float(sample_count)
+        point = (first[0] + (second[0] - first[0]) * ratio,
+                 first[1] + (second[1] - first[1]) * ratio)
+        if not point_is_free(point, inflation, dynamic_circles):
+            return False
+    return True
+
+
+def simplify_route(points, inflation=0.45, dynamic_circles=()):
     if len(points) < 3:
         return tuple(points)
     result = [points[0]]
-    for index in range(1, len(points) - 1):
-        before = points[index - 1]
-        current = points[index]
-        after = points[index + 1]
-        first = (round(current[0] - before[0], 6),
-                 round(current[1] - before[1], 6))
-        second = (round(after[0] - current[0], 6),
-                  round(after[1] - current[1], 6))
-        if first != second:
-            result.append(current)
-    result.append(points[-1])
+    anchor = 0
+    final = len(points) - 1
+    while anchor < final:
+        candidate = final
+        while candidate > anchor + 1:
+            if _segment_is_free(points[anchor], points[candidate],
+                                inflation + 0.12, dynamic_circles):
+                break
+            candidate -= 1
+        if candidate == anchor + 1:
+            candidate = final
+            while candidate > anchor + 1:
+                if _segment_is_free(points[anchor], points[candidate],
+                                    inflation, dynamic_circles):
+                    break
+                candidate -= 1
+        result.append(points[candidate])
+        anchor = candidate
     return tuple(result)
 
 
@@ -184,7 +204,7 @@ def plan_route(start, goal, resolution=0.10, inflation=0.45,
             points = [world(node) for node in nodes]
             points[0] = start
             points[-1] = goal
-            return simplify_route(points)
+            return simplify_route(points, inflation, dynamic_circles)
         closed.add(current)
         for dx, dy in directions:
             neighbor = (current[0] + dx, current[1] + dy)
@@ -195,6 +215,9 @@ def plan_route(start, goal, resolution=0.10, inflation=0.45,
                         valid((current[0], current[1] + dy))):
                     continue
             step_cost = resolution * (math.sqrt(2.0) if dx and dy else 1.0)
+            if not point_is_free(world(neighbor), inflation + 0.12,
+                                 dynamic_circles):
+                step_cost += resolution * 2.0
             candidate_cost = current_cost + step_cost
             if candidate_cost >= costs.get(neighbor, float('inf')):
                 continue

@@ -15,6 +15,16 @@ from firefighting_mission.field_map import plan_route, point_is_free
 
 
 class FieldMapTest(unittest.TestCase):
+    def test_planned_route_keeps_airframe_diagonal_boundary_margin(self):
+        route = plan_route(
+            (0.00, 0.00), (1.50, -1.45),
+            dynamic_circles=((0.70, -1.45, 0.20),))
+
+        self.assertGreaterEqual(min(point[0] for point in route), -0.07)
+        self.assertLessEqual(max(point[0] for point in route), 2.77)
+        self.assertGreaterEqual(min(point[1] for point in route), -2.77)
+        self.assertLessEqual(max(point[1] for point in route), 0.07)
+
     def test_route_avoids_every_inflated_fixed_board(self):
         route = plan_route((0.0, 0.0), (2.70, -1.90))
 
@@ -58,6 +68,13 @@ class FieldMapTest(unittest.TestCase):
         self.assertEqual((1.40, -0.45), route[-1])
         self.assertLess(len(route), 20)
 
+    def test_route_centres_the_1_3_m_entry_corridor(self):
+        route = plan_route((0.0, 0.0), (1.50, -1.45))
+
+        first_transit = route[1]
+        self.assertLessEqual(abs(first_transit[0]), 0.05, route)
+        self.assertLess(first_transit[1], -1.05, route)
+
     def test_real_hazard_goal_survives_grid_rounding_near_board(self):
         route = plan_route((0.0, 0.0), (1.25, -0.10))
 
@@ -91,6 +108,27 @@ class FieldMapTest(unittest.TestCase):
                     math.hypot(x_value - circle[0],
                                y_value - circle[1]),
                     circle[2] + 0.44)
+
+    def test_dynamic_route_uses_safe_visibility_shortcuts(self):
+        circles = ((0.70, -1.45, 0.10),
+                   (2.10, -1.95, 0.10))
+
+        route = plan_route(
+            (0.00, -1.00), (1.50, -1.45),
+            dynamic_circles=circles)
+
+        self.assertLessEqual(len(route), 7, route)
+        for first, second in zip(route, route[1:]):
+            distance = math.hypot(second[0] - first[0],
+                                  second[1] - first[1])
+            sample_count = max(1, int(math.ceil(distance / 0.025)))
+            for index in range(sample_count + 1):
+                ratio = index / float(sample_count)
+                point = (first[0] + (second[0] - first[0]) * ratio,
+                         first[1] + (second[1] - first[1]) * ratio)
+                self.assertTrue(point_is_free(
+                    point, inflation=0.45,
+                    dynamic_circles=circles), (first, second, point))
 
     def test_route_can_escape_dynamic_inflation_at_current_pose(self):
         circle = (0.48, -1.41, 0.15)

@@ -10,7 +10,8 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, 'src'))
 
 from firefighting_mission.path_planner import (
-    VisualPathPlanner, VisualPlannerConfig, corridor_clearances, ramp_setpoint)
+    VisualPathPlanner, VisualPlannerConfig, corridor_clearances,
+    map_target_to_local, ramp_setpoint)
 from firefighting_mission.stereo_obstacles import ObstacleClusterData
 
 
@@ -23,7 +24,7 @@ def straight_route(start, goal):
 
 
 def planner_with_goal(config=None, dynamic_route_provider=None):
-    config = config or VisualPlannerConfig()
+    config = config or VisualPlannerConfig(geofence_warning_margin=-10.0)
     config.known_static_tolerance = -1.0
     kwargs = {
         'config': config,
@@ -58,6 +59,18 @@ def drive_through_rejoin(planner, obstacle=OBSTACLE):
 
 
 class VisualPathPlannerTest(unittest.TestCase):
+    def test_map_target_is_shifted_into_current_px4_local_frame(self):
+        target = (0.0, -1.0, 1.2, -1.0)
+        map_pose = (0.35, -0.44, 1.6, 0.2)
+        local_pose = (-0.10, -0.05, 1.37, 0.1)
+
+        converted = map_target_to_local(target, map_pose, local_pose)
+
+        self.assertAlmostEqual(-0.45, converted[0], places=6)
+        self.assertAlmostEqual(-0.61, converted[1], places=6)
+        self.assertAlmostEqual(1.20, converted[2], places=6)
+        self.assertAlmostEqual(-1.10, converted[3], places=6)
+
     def test_follow_route_never_commands_23_metres(self):
         planner = planner_with_goal()
 
@@ -171,7 +184,23 @@ class VisualPathPlannerTest(unittest.TestCase):
         self.assertEqual(1, len(planner.temporary_obstacles))
         self.assertAlmostEqual(0.11, planner.temporary_obstacles[0][2])
 
-    def test_rejoin_replans_with_temporary_obstacles(self):
+    def test_noisy_observations_half_metre_apart_merge_as_one_cylinder(self):
+        planner = planner_with_goal()
+
+        planner._remember_obstacle((0.70, -1.45, 0.20))
+        planner._remember_obstacle((1.15, -1.45, 0.20))
+
+        self.assertEqual(1, len(planner.temporary_obstacles))
+
+    def test_cylinders_nine_tenths_apart_remain_distinct(self):
+        planner = planner_with_goal()
+
+        planner._remember_obstacle((0.70, -1.45, 0.20))
+        planner._remember_obstacle((1.60, -1.45, 0.20))
+
+        self.assertEqual(2, len(planner.temporary_obstacles))
+
+    def test_close_observation_replans_with_temporary_obstacles(self):
         calls = []
 
         def dynamic_route(start, goal, circles):
@@ -180,8 +209,9 @@ class VisualPathPlannerTest(unittest.TestCase):
 
         planner = planner_with_goal(dynamic_route_provider=dynamic_route)
         planner.clearance_override = (1.30, 1.00)
+        drive_to_select(planner)
 
-        command = drive_through_rejoin(planner)
+        command = planner.update(POSE, (OBSTACLE,), True, 1.5)
 
         self.assertEqual('FOLLOW_ROUTE', command.state)
         self.assertEqual(1, len(calls))
@@ -204,12 +234,58 @@ class VisualPathPlannerTest(unittest.TestCase):
 
         self.assertEqual('FOLLOW_ROUTE', first.state)
         self.assertEqual('FOLLOW_ROUTE', second.state)
+        self.assertEqual('dynamic_route_replanned', second.reason)
         self.assertEqual((0.0, 0.50, 1.2), second.target)
         self.assertEqual(1, len(calls))
         self.assertEqual(1, len(planner.temporary_obstacles))
-        self.assertAlmostEqual(1.40, planner.temporary_obstacles[0][0])
+        self.assertAlmostEqual(1.50, planner.temporary_obstacles[0][0])
+        self.assertAlmostEqual(0.20, planner.temporary_obstacles[0][2])
 
-    def test_far_cylinder_memory_uses_physical_radius_not_projected_width(self):
+    def test_remembered_far_cylinder_does_not_replan_every_two_frames(self):
+        calls = []
+        far_obstacle = OBSTACLE._replace(
+            forward_m=1.40, nearest_range_m=1.35)
+
+        def dynamic_route(start, goal, circles):
+            calls.append((tuple(start), tuple(goal), tuple(circles)))
+            return (tuple(start), (0.50, 0.0), tuple(goal))
+
+        planner = planner_with_goal(dynamic_route_provider=dynamic_route)
+
+        for index in range(8):
+            planner.update(POSE, (far_obstacle,), True, 1.0 + index * 0.1)
+
+        self.assertEqual(1, len(calls))
+        self.assertEqual(1, len(planner.temporary_obstacles))
+
+    def test_one_metre_camera_detection_replans_before_close_range_brake(self):
+        calls = []
+        observed_cylinder = OBSTACLE._replace(
+            forward_m=0.71, nearest_range_m=0.66,
+            left_m=0.48, left_edge_m=0.61, right_edge_m=0.42)
+
+        def dynamic_route(start, goal, circles):
+            calls.append((tuple(start), tuple(goal), tuple(circles)))
+            return (tuple(start), tuple(goal))
+
+        config = VisualPlannerConfig(sensor_forward_offset=0.32)
+        planner = planner_with_goal(
+            config=config, dynamic_route_provider=dynamic_route)
+
+        first = planner.update(POSE, (observed_cylinder,), True, 1.0)
+        second = planner.update(POSE, (observed_cylinder,), True, 1.1)
+
+        self.assertEqual('FOLLOW_ROUTE', first.state)
+        self.assertEqual('FOLLOW_ROUTE', second.state)
+        self.assertEqual(1, len(calls))
+        surface_range = math.hypot(
+            observed_cylinder.forward_m + config.sensor_forward_offset,
+            observed_cylinder.left_m)
+        remembered_range = math.hypot(calls[0][2][0][0],
+                                      calls[0][2][0][1])
+        self.assertGreater(remembered_range, surface_range)
+
+    def test_far_cylinder_memory_uses_bounded_uncertainty_not_projected_width(self):
         calls = []
         wide_far_obstacle = OBSTACLE._replace(
             forward_m=1.40, nearest_range_m=1.35,
@@ -225,9 +301,9 @@ class VisualPathPlannerTest(unittest.TestCase):
         planner.update(POSE, (wide_far_obstacle,), True, 1.1)
 
         self.assertEqual(1, len(calls))
-        self.assertAlmostEqual(0.10, calls[0][0][2])
+        self.assertAlmostEqual(0.20, calls[0][0][2])
 
-    def test_dynamic_replan_failure_latches_hold_instead_of_resuming_far_route(self):
+    def test_far_dynamic_replan_failure_defers_without_poisoning_route(self):
         far_obstacle = OBSTACLE._replace(
             forward_m=1.40, nearest_range_m=1.35)
 
@@ -238,11 +314,10 @@ class VisualPathPlannerTest(unittest.TestCase):
 
         planner.update(POSE, (far_obstacle,), True, 1.0)
         failed = planner.update(POSE, (far_obstacle,), True, 1.1)
-        following = planner.update(POSE, (far_obstacle,), True, 1.2)
 
-        self.assertEqual('HOLD_UNSAFE', failed.state)
-        self.assertEqual('HOLD_UNSAFE', following.state)
-        self.assertEqual('dynamic_route_unreachable', following.reason)
+        self.assertEqual('FOLLOW_ROUTE', failed.state)
+        self.assertEqual('dynamic_route_deferred', failed.reason)
+        self.assertEqual((), planner.temporary_obstacles)
 
     def test_dynamic_replan_failure_holds(self):
         def unreachable(_start, _goal, _circles):
@@ -255,6 +330,25 @@ class VisualPathPlannerTest(unittest.TestCase):
 
         self.assertEqual('HOLD_UNSAFE', command.state)
         self.assertEqual('dynamic_route_unreachable', command.reason)
+
+    def test_close_cylinder_replans_after_brake_and_observation(self):
+        calls = []
+
+        def dynamic_route(start, goal, circles):
+            calls.append((tuple(start), tuple(goal), tuple(circles)))
+            return (tuple(start), (0.0, 0.5), tuple(goal))
+
+        planner = planner_with_goal(dynamic_route_provider=dynamic_route)
+        planner.clearance_override = (1.30, 1.30)
+        drive_to_select(planner)
+
+        command = planner.update(POSE, (OBSTACLE,), True, 1.5)
+
+        self.assertEqual('FOLLOW_ROUTE', command.state)
+        self.assertEqual('dynamic_route_replanned', command.reason)
+        self.assertEqual((0.0, 0.5, 1.2), command.target)
+        self.assertEqual(1, len(calls))
+        self.assertAlmostEqual(0.20, calls[0][2][0][2])
 
     def test_selects_wider_left_corridor(self):
         planner = planner_with_goal()
@@ -312,6 +406,45 @@ class VisualPathPlannerTest(unittest.TestCase):
 
         self.assertEqual(POSE[:3], command.target)
 
+    def test_visual_loss_latches_first_hold_yaw(self):
+        planner = planner_with_goal()
+        first = planner.update((0.0, 0.0, 1.2, -1.2), (), False, 2.0)
+
+        second = planner.update((0.2, -0.3, 1.2, 0.8), (), False, 2.1)
+
+        self.assertAlmostEqual(-1.2, first.target_yaw, places=6)
+        self.assertAlmostEqual(-1.2, second.target_yaw, places=6)
+
+    def test_geofence_warning_commands_recovery_inside_field(self):
+        planner = VisualPathPlanner(
+            config=VisualPlannerConfig(known_static_tolerance=-1.0),
+            route_provider=straight_route)
+        planner.set_goal((2.0, 0.0, 1.2), POSE)
+        near_west_net = (-0.16, -1.50, 1.20, -1.2)
+
+        command = planner.update(near_west_net, (), True, 2.0)
+
+        self.assertEqual('HOLD_UNSAFE', command.state)
+        self.assertEqual('geofence_recovery', command.reason)
+        self.assertAlmostEqual(0.0, command.target[0], places=6)
+        self.assertAlmostEqual(-1.50, command.target[1], places=6)
+        self.assertAlmostEqual(-1.2, command.target_yaw, places=6)
+
+    def test_geofence_recovery_stays_latched_until_recentred(self):
+        planner = VisualPathPlanner(
+            config=VisualPlannerConfig(known_static_tolerance=-1.0),
+            route_provider=straight_route)
+        planner.set_goal((2.0, 0.0, 1.2), POSE)
+        planner.update((-0.16, -1.50, 1.20, -1.2), (), True, 2.0)
+
+        still_recovering = planner.update(
+            (-0.09, -1.50, 1.20, -1.2), (), True, 2.1)
+        recentred = planner.update(
+            (-0.02, -1.50, 1.20, -1.2), (), True, 2.2)
+
+        self.assertEqual('geofence_recovery', still_recovering.reason)
+        self.assertNotEqual('geofence_recovery', recentred.reason)
+
     def test_altitude_error_holds_xy_and_recovers_12(self):
         command = planner_with_goal().update(
             (0.3, -0.2, 1.36, 0.0), (), True, 2.0)
@@ -319,6 +452,37 @@ class VisualPathPlannerTest(unittest.TestCase):
         self.assertEqual('HOLD_UNSAFE', command.state)
         self.assertEqual((0.3, -0.2, 1.2), command.target)
         self.assertEqual('altitude_out_of_band', command.reason)
+
+    def test_small_altitude_overshoot_stops_before_scoring_limit(self):
+        command = planner_with_goal().update(
+            (0.0, 0.0, 1.305, 0.0), (), True, 2.0)
+
+        self.assertEqual('HOLD_UNSAFE', command.state)
+        self.assertEqual('altitude_out_of_band', command.reason)
+
+    def test_altitude_sag_stops_horizontal_route_early(self):
+        command = planner_with_goal().update(
+            (0.0, -1.0, 1.04, -1.57), (), True, 2.0)
+
+        self.assertEqual('HOLD_UNSAFE', command.state)
+        self.assertEqual('altitude_out_of_band', command.reason)
+
+    def test_default_altitude_guard_acts_before_one_point_one_metres(self):
+        self.assertAlmostEqual(
+            0.08, VisualPlannerConfig().altitude_tolerance, places=6)
+        command = planner_with_goal().update(
+            (0.0, -1.0, 1.11, -1.57), (), True, 2.0)
+
+        self.assertEqual('HOLD_UNSAFE', command.state)
+        self.assertEqual('altitude_out_of_band', command.reason)
+
+    def test_non_finite_pose_never_reports_goal_reached(self):
+        command = planner_with_goal().update(
+            (float('nan'), 0.0, 1.2, 0.0), (), True, 2.0)
+
+        self.assertEqual('HOLD_UNSAFE', command.state)
+        self.assertEqual('invalid_pose', command.reason)
+        self.assertIsNone(command.target)
 
     def test_full_avoidance_sequence_rejoins_route(self):
         planner = planner_with_goal()
@@ -345,7 +509,7 @@ class VisualPathPlannerTest(unittest.TestCase):
         def staged_route(start, goal):
             return (tuple(start), (0.5, 0.0), (1.0, 0.0), tuple(goal))
 
-        config = VisualPlannerConfig()
+        config = VisualPlannerConfig(geofence_warning_margin=-10.0)
         config.known_static_tolerance = -1.0
         planner = VisualPathPlanner(
             config=config, route_provider=staged_route,
@@ -393,6 +557,10 @@ class VisualPathPlannerTest(unittest.TestCase):
         self.assertEqual(POSE[:3], command.target)
         self.assertAlmostEqual(-1.5708, command.target_yaw, places=3)
 
+    def test_default_yaw_alignment_waits_for_rotation_to_settle(self):
+        self.assertAlmostEqual(
+            0.10, VisualPlannerConfig().yaw_alignment_tolerance, places=6)
+
     def test_route_yaw_alignment_latches_first_xy(self):
         def turning_route(start, goal):
             return (tuple(start), (0.0, -0.5), tuple(goal))
@@ -403,6 +571,39 @@ class VisualPathPlannerTest(unittest.TestCase):
         command = planner.update((0.2, -0.3, 1.2, -0.1), (), True, 3.1)
 
         self.assertEqual(POSE[:3], command.target)
+
+    def test_follow_route_skips_waypoint_passed_without_entering_radius(self):
+        def staged_route(start, goal):
+            return (tuple(start), (0.0, -1.0), (1.0, -1.0), tuple(goal))
+        planner = VisualPathPlanner(route_provider=staged_route)
+        planner.set_goal((2.0, -1.0, 1.2), POSE)
+
+        command = planner.update((0.10, -1.20, 1.2, 0.0), (), True, 3.0)
+
+        self.assertEqual((1.0, -1.0, 1.2), command.target)
+        self.assertEqual('', command.reason)
+        self.assertAlmostEqual(0.0, command.target_yaw, places=6)
+
+    def test_intermediate_waypoint_yaw_uses_stable_segment_direction(self):
+        def staged_route(start, goal):
+            return (tuple(start), (0.0, -1.0), (1.0, -1.0), tuple(goal))
+        planner = VisualPathPlanner(route_provider=staged_route)
+        planner.set_goal((2.0, -1.0, 1.2), POSE)
+
+        command = planner.update((0.10, -0.90, 1.2, 0.0), (), True, 3.0)
+
+        self.assertEqual('aligning_route_yaw', command.reason)
+        self.assertAlmostEqual(-math.pi / 2.0,
+                               command.target_yaw, places=6)
+
+    def test_follow_route_never_projection_skips_final_goal(self):
+        planner = planner_with_goal()
+
+        command = planner.update((3.0, 0.0, 1.2, 0.0), (), True, 3.0)
+
+        self.assertNotEqual('REACHED', command.state)
+        self.assertEqual('aligning_route_yaw', command.reason)
+        self.assertAlmostEqual(math.pi, abs(command.target_yaw), places=6)
 
     def test_brake_and_observe_latch_detection_xy(self):
         planner = planner_with_goal()
@@ -432,6 +633,15 @@ class VisualPathPlannerTest(unittest.TestCase):
             maximum_lead=None)
 
         self.assertEqual((0.0, 0.0), output[:2])
+
+    def test_setpoint_lead_limit_never_drags_route_toward_pose_drift(self):
+        output = ramp_setpoint(
+            last=(0.0, -0.5, 1.2, -1.57),
+            desired=(0.0, -1.0, 1.2, -1.57),
+            current=(0.3, -0.5, 1.2, -1.57), dt=0.10,
+            horizontal_speed=0.20, maximum_lead=0.08)
+
+        self.assertEqual((0.0, -0.5), output[:2])
 
     def test_fixed_wall_blocks_side_selection_that_would_cross_it(self):
         planner = VisualPathPlanner(

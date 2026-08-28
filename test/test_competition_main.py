@@ -187,6 +187,21 @@ class CompetitionMainTest(unittest.TestCase):
         self.assertEqual('0.2', spawn_z_arg.attrib.get('default'))
         self.assertIn('$(arg spawn_z)', sitl.attrib.get('args'))
 
+    def test_takeoff_launch_waits_for_sitl_estimator_before_arming(self):
+        root = ET.parse(os.path.join(PROJECT_ROOT, 'launch',
+                                     'competition_takeoff.launch')).getroot()
+        prestream_arg = next(arg for arg in root.findall('arg')
+                             if arg.attrib.get('name') == 'prestream_count')
+        competition = next(node for node in root.findall('node')
+                           if node.attrib.get('type') == 'competition_main.py')
+        prestream_param = next(
+            param for param in competition.findall('param')
+            if param.attrib.get('name') == 'prestream_count')
+
+        self.assertEqual('120', prestream_arg.attrib.get('default'))
+        self.assertEqual('$(arg prestream_count)',
+                         prestream_param.attrib.get('value'))
+
     def test_safety_takeover_is_gated_until_vehicle_is_airborne(self):
         with open(os.path.join(PROJECT_ROOT, 'scripts',
                                'competition_main.py'), 'r') as handle:

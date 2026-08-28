@@ -55,9 +55,12 @@ class OrchestrationTest(unittest.TestCase):
                          'field_floor::link::collision')
         obstacle = Contact('iris_0::base_link::base_link_inertia_collision',
                            'fixed_obstacle_1::link::collision')
+        safety_net = Contact('iris_0::base_link::base_link_inertia_collision',
+                             'safety_net_west::link::collision')
 
         self.assertFalse(contacts_indicate_collision([ground]))
         self.assertTrue(contacts_indicate_collision([ground, obstacle]))
+        self.assertTrue(contacts_indicate_collision([safety_net]))
 
     def test_recording_topics_follow_configured_mavros_and_scan_inputs(self):
         topics = recording_topics('/mavros', '/iris_0/scan')
@@ -91,6 +94,32 @@ class OrchestrationTest(unittest.TestCase):
 
         self.assertNotIn('1.30', manager)
         self.assertIn("'RETURN_HOME': (0.0, 0.0, 1.20)", manager)
+
+    def test_visual_route_defaults_limit_turn_tracking_overshoot(self):
+        with open(os.path.join(PROJECT_ROOT, 'scripts',
+                               'path_planner.py'), 'r') as handle:
+            planner_node = handle.read()
+
+        self.assertIn("'~maximum_horizontal_speed', 0.20", planner_node)
+        self.assertIn("'~maximum_setpoint_lead', 0.08", planner_node)
+        self.assertIn("'~maximum_yaw_rate', 0.15", planner_node)
+        self.assertIn("'HOLD_UNSAFE', 'REACHED'", planner_node)
+
+    def test_sitl_control_aligns_gazebo_map_to_px4_local_frame(self):
+        with open(os.path.join(PROJECT_ROOT, 'scripts',
+                               'path_planner.py'), 'r') as handle:
+            planner_node = handle.read()
+        with open(os.path.join(PROJECT_ROOT, 'scripts',
+                               'competition_main.py'), 'r') as handle:
+            control_node = handle.read()
+
+        self.assertIn("'~use_gazebo_ground_truth', False", planner_node)
+        self.assertIn("'/gazebo/model_states'", planner_node)
+        self.assertNotIn('map_target_to_local', planner_node)
+        self.assertIn("'~use_gazebo_ground_truth', False", control_node)
+        self.assertIn("'/gazebo/model_states'", control_node)
+        self.assertIn('map_target_to_local', control_node)
+        self.assertIn("'WAIT_MAP'", control_node)
 
     def test_completion_requires_recorder_ack_or_bounded_deadline(self):
         self.assertFalse(completion_should_shutdown(False, 4.9, 5.0))
@@ -220,6 +249,12 @@ class OrchestrationTest(unittest.TestCase):
 
         self.assertIn('export DISPLAY="${DISPLAY:-:0}"', wrapper)
 
+    def test_ros_path_planner_keeps_close_brake_inside_global_replan_range(self):
+        with open(os.path.join(PROJECT_ROOT, 'scripts', 'path_planner.py'), 'r') as handle:
+            node = handle.read()
+
+        self.assertIn("'~trigger_range', 0.85", node)
+
     def test_active_avoidance_has_no_random_cylinder_truth_input(self):
         paths = (
             'scripts/path_planner.py',
@@ -234,7 +269,8 @@ class OrchestrationTest(unittest.TestCase):
         active = '\n'.join(contents)
 
         self.assertNotIn('CYLINDER_POSES', active)
-        self.assertNotIn('/gazebo/model_states', active)
+        self.assertNotIn('random_cylinder_1', active)
+        self.assertNotIn('random_cylinder_2', active)
 
 
 if __name__ == '__main__':
