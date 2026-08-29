@@ -1,0 +1,18 @@
+#!/bin/sh
+# SITL-only external-vision position and velocity fusion. Trust low-noise Gazebo
+# ground truth. Preserve PX4 automatic yaw initialization, but raise its 3-axis
+# mag switch threshold so ordinary route turns stay in stable heading fusion.
+param set EKF2_MAGBIAS_ID 0
+param set EKF2_MAGBIAS_X 0
+param set EKF2_MAGBIAS_Y 0
+param set EKF2_MAGBIAS_Z 0
+param set EKF2_AID_MASK 264
+param set EKF2_MAG_TYPE 0
+param set EKF2_MAG_ACCLIM 5.0
+param set EKF2_HGT_MODE 3
+param set EKF2_EV_DELAY 0
+param set EKF2_EV_NOISE_MD 1
+param set EKF2_EVP_NOISE 0.03
+param set EKF2_EVV_NOISE 0.03
+param set EKF2_EVP_GATE 10
+param set EKF2_EVV_GATE 10

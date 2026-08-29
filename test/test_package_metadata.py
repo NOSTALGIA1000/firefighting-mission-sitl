@@ -36,9 +36,55 @@ class PackageMetadataTest(unittest.TestCase):
         self.assertIn('catkin_add_nosetests(test/test_competition_main.py)',
                       cmake)
 
+    def test_external_vision_bridge_is_installed_and_tested(self):
+        cmake = self._read('CMakeLists.txt')
+        start_sitl = self._read('scripts/start_sitl.sh')
+        px4_post = self._read('config/px4/10016_iris.post')
+
+        self.assertIn('scripts/gazebo_vision_bridge.py', cmake)
+        self.assertIn('catkin_add_nosetests(test/test_external_vision.py)',
+                      cmake)
+        self.assertIn('config', cmake)
+        self.assertIn('config/px4/10016_iris.post', start_sitl)
+        self.assertIn('cmp -s', start_sitl)
+        self.assertIn('EKF2_AID_MASK 264', px4_post)
+        self.assertIn('EKF2_MAG_TYPE 0', px4_post)
+        self.assertIn('EKF2_MAG_ACCLIM 5.0', px4_post)
+        self.assertIn('EKF2_MAGBIAS_ID 0', px4_post)
+        self.assertIn('EKF2_MAGBIAS_X 0', px4_post)
+        self.assertIn('EKF2_MAGBIAS_Y 0', px4_post)
+        self.assertIn('EKF2_MAGBIAS_Z 0', px4_post)
+        self.assertIn('EKF2_EV_NOISE_MD 1', px4_post)
+        self.assertIn('EKF2_EVP_NOISE 0.03', px4_post)
+        self.assertIn('EKF2_EVV_NOISE 0.03', px4_post)
+        self.assertIn('EKF2_EVP_GATE 10', px4_post)
+        self.assertIn('EKF2_EVV_GATE 10', px4_post)
+        self.assertIn('EKF2_HGT_MODE 3', px4_post)
+        self.assertIn('EKF2_EV_DELAY 0', px4_post)
+
+        bridge = self._read('scripts/gazebo_vision_bridge.py')
+        self.assertIn('/mavros/odometry/out', bridge)
+        self.assertIn('nav_msgs.msg import Odometry', bridge)
+        self.assertIn("message.header.frame_id = 'odom'", bridge)
+        self.assertIn("message.child_frame_id = 'base_link'", bridge)
+        self.assertNotIn('/mavros/vision_pose/pose', bridge)
+        self.assertNotIn('/mavros/vision_speed/', bridge)
+
+        for launch_name in ('competition_takeoff.launch',
+                            'firefighting.launch'):
+            launch = ET.parse(os.path.join(PROJECT_ROOT, 'launch',
+                                           launch_name)).getroot()
+            bridges = [node for node in launch.findall('node')
+                       if node.attrib.get('type') ==
+                       'gazebo_vision_bridge.py']
+            self.assertEqual(1, len(bridges), launch_name)
+            self.assertEqual('$(arg use_gazebo_ground_truth)',
+                             bridges[0].attrib.get('if'))
+
     def test_roslaunch_nodes_are_checked_in_as_executable(self):
         for relative_path in ('scripts/start_sitl.sh',
-                              'scripts/competition_main.py'):
+                              'scripts/competition_main.py',
+                              'scripts/gazebo_vision_bridge.py'):
             if os.path.exists(os.path.join(PROJECT_ROOT, '.git')):
                 output = subprocess.check_output(
                     ['git', 'ls-files', '--stage', relative_path],

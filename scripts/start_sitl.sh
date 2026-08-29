@@ -11,6 +11,14 @@ spawn_z="${5:-0.2}"
 case "$sdf" in __*:=*) sdf="$default_sdf" ;; esac
 case "$spawn_z" in __*:=*) spawn_z="0.2" ;; esac
 px4_root="${PX4_FIRMWARE_DIR:-/home/ss/PX4_Firmware}"
+vision_post_source="$package_root/config/px4/10016_iris.post"
+vision_post_target="$px4_root/ROMFS/px4fmu_common/init.d-posix/10016_iris.post"
+if [[ ! -e "$vision_post_target" ]]; then
+  cp "$vision_post_source" "$vision_post_target"
+elif ! cmp -s "$vision_post_source" "$vision_post_target"; then
+  echo "Refusing to overwrite different PX4 iris post-start file: $vision_post_target" >&2
+  exit 2
+fi
 export DISPLAY="${DISPLAY:-:0}"
 export ROS_PACKAGE_PATH="$px4_root:$px4_root/Tools/sitl_gazebo:${ROS_PACKAGE_PATH:-}"
 gazebo_system_plugin_path="/usr/lib/x86_64-linux-gnu/gazebo-9/plugins"

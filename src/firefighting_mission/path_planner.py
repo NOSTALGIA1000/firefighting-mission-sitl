@@ -27,8 +27,8 @@ class VisualPlannerConfig(object):
                  global_replan_merge_distance=0.55,
                  dynamic_obstacle_radius=0.10,
                  dynamic_localization_margin=0.10,
-                 geofence_warning_margin=0.55,
-                 geofence_recovery_margin=0.65,
+                 geofence_warning_margin=0.35,
+                 geofence_recovery_margin=0.55,
                  geofence_recovery_tolerance=0.05):
         self.altitude = float(altitude)
         self.altitude_tolerance = float(altitude_tolerance)
@@ -336,7 +336,7 @@ class VisualPathPlanner(object):
             'HOLD_UNSAFE', self.hold_target, self.hold_yaw,
             'geofence_recovery')
 
-    def _nearest_obstacle(self, pose, obstacles):
+    def _visible_unknown_obstacles(self, pose, obstacles):
         candidates = []
         for value in obstacles:
             shifted = value._replace(
@@ -349,9 +349,16 @@ class VisualPathPlanner(object):
             if point_matches_known_static(
                     surface, self.config.known_static_tolerance):
                 continue
-            if (shifted.forward_m > 0.0 and
-                    abs(shifted.left_m) <= self.config.lateral_trigger):
+            if shifted.forward_m > 0.0:
                 candidates.append(shifted)
+        return tuple(candidates)
+
+    def _nearest_obstacle(self, pose, obstacles, corridor_only=True):
+        candidates = self._visible_unknown_obstacles(pose, obstacles)
+        if corridor_only:
+            candidates = tuple(
+                value for value in candidates
+                if abs(value.left_m) <= self.config.lateral_trigger)
         if not candidates:
             return None
         return min(candidates, key=lambda value: value.nearest_range_m)
@@ -498,18 +505,13 @@ class VisualPathPlanner(object):
             self._clear_hold()
 
         nearest = self._nearest_obstacle(pose, obstacles)
+        global_obstacle = self._nearest_obstacle(
+            pose, obstacles, corridor_only=False)
         if self.state == 'FOLLOW_ROUTE':
             route_command = self._follow_route(pose)
             if route_command.state == 'REACHED':
                 self._clear_hold()
                 return route_command
-            if abs(angle_difference(pose[3], route_command.target_yaw)) > \
-                    self.config.yaw_alignment_tolerance:
-                return self._command(
-                    'FOLLOW_ROUTE', self._lock_hold(pose),
-                    route_command.target_yaw,
-                    'aligning_route_yaw')
-            self._clear_hold()
             if (nearest is not None and
                     nearest.nearest_range_m < self.config.trigger_range):
                 self._reset_global_candidate()
@@ -518,9 +520,17 @@ class VisualPathPlanner(object):
                 return self._command(
                     'BRAKE', self._lock_hold(pose), self.hold_yaw)
             dynamic_command = self._maybe_replan_for_far_obstacle(
-                pose, nearest)
+                pose, global_obstacle)
             if dynamic_command is not None:
+                self._clear_hold()
                 return dynamic_command
+            if abs(angle_difference(pose[3], route_command.target_yaw)) > \
+                    self.config.yaw_alignment_tolerance:
+                return self._command(
+                    'FOLLOW_ROUTE', self._lock_hold(pose),
+                    route_command.target_yaw,
+                    'aligning_route_yaw')
+            self._clear_hold()
             return route_command
 
         if self.state == 'BRAKE':

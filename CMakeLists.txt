@@ -63,6 +63,7 @@ target_link_libraries(fire_payload_plugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES
 if(CATKIN_ENABLE_TESTING)
   find_package(rostest REQUIRED)
   catkin_add_nosetests(test/test_package_metadata.py)
+  catkin_add_nosetests(test/test_external_vision.py)
   catkin_add_nosetests(test/test_navigation.py)
   catkin_add_nosetests(test/test_path_planner.py)
   catkin_add_nosetests(test/test_orchestration.py)
@@ -84,6 +85,7 @@ if(CATKIN_ENABLE_TESTING)
 endif()
 
 catkin_install_python(PROGRAMS
+  scripts/gazebo_vision_bridge.py
   scripts/generate_world.py
   scripts/navigator_node.py
   scripts/safety_monitor_node.py
@@ -105,6 +107,6 @@ install(PROGRAMS scripts/run_mission.sh scripts/run_avoidance_matrix.sh
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
-install(DIRECTORY launch models assets
+install(DIRECTORY launch models assets config
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )

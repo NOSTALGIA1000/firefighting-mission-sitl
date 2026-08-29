@@ -32,6 +32,7 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
         self.contact_pairs = []
         self.event_trace = []
         self.last_avoidance_state = ''
+        self.last_avoidance_reason = ''
         self.states = set()
         self.reasons = set()
         self.collision = False
@@ -45,6 +46,7 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
         self.fcu_armed = False
         self.transit = False
         self.altitudes = []
+        self.pose_alignment_errors = []
         self.goal_pub = rospy.Publisher('/fire_mission/point_goal', PoseStamped,
                                         queue_size=1, latch=True)
         rospy.Subscriber('/competition_main/state', String, self._controller)
@@ -72,7 +74,8 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
         self.selected_side = message.selected_side
         self.clearances = (message.left_clearance_m,
                            message.right_clearance_m)
-        if message.state != self.last_avoidance_state:
+        if (message.state != self.last_avoidance_state or
+                message.reason != self.last_avoidance_reason):
             self.event_trace.append({
                 'state': message.state,
                 'reason': message.reason,
@@ -83,6 +86,7 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
                 'obstacles': list(self.obstacles),
             })
             self.last_avoidance_state = message.state
+            self.last_avoidance_reason = message.reason
         if self.transit:
             self.states.add(message.state)
             if message.reason:
@@ -116,6 +120,7 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
             return
         point = message.pose[index].position
         self.gazebo_pose = (point.x, point.y, point.z)
+        self._record_pose_alignment()
 
     def _obstacles(self, message):
         self.obstacles = [
@@ -134,6 +139,16 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
                          orientation.z * orientation.z))
         if self.transit:
             self.altitudes.append(point.z)
+        self._record_pose_alignment()
+
+    def _record_pose_alignment(self):
+        if (not self.transit or self.last_pose is None or
+                self.gazebo_pose is None):
+            return
+        self.pose_alignment_errors.append(math.sqrt(sum(
+            (mavros_value - gazebo_value) ** 2
+            for mavros_value, gazebo_value in zip(
+                self.last_pose, self.gazebo_pose))))
 
     @staticmethod
     def _goal(x_value, y_value):
@@ -192,6 +207,10 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
                                          self.altitudes else None),
             'maximum_transit_altitude': (max(self.altitudes) if
                                          self.altitudes else None),
+            'maximum_pose_alignment_error_m': (
+                max(self.pose_alignment_errors) if
+                self.pose_alignment_errors else None),
+            'last_gazebo_pose': self.gazebo_pose,
             'reached_goal': self.path_state == 'REACHED',
             'path_state': self.path_state,
             'avoidance_reason': self.avoidance_reason,
@@ -231,6 +250,8 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
         self.assertTrue(self.altitudes)
         self.assertLessEqual(max(self.altitudes), 1.30)
         self.assertGreaterEqual(min(self.altitudes), 1.10)
+        self.assertTrue(self.pose_alignment_errors)
+        self.assertLessEqual(max(self.pose_alignment_errors), 0.25)
         self.assertTrue(all(not math.isnan(value) and not math.isinf(value)
                             for value in self.last_pose))
         self.assertEqual('REACHED', self.path_state)
