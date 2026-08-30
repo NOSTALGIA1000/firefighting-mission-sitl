@@ -20,7 +20,7 @@
     <param name="health_stable_seconds" value="3.0"/>
     <param name="health_max_message_age" value="1.5"/>
     <param name="health_accel_min" value="5.0"/>
-    <param name="health_accel_max" value="15.0"/>
+    <param name="health_accel_max" value="20.0"/>
   </node>
   <node pkg="firefighting_mission" type="stereo_obstacle_node.py"
         name="stereo_obstacle_adapter" output="screen">

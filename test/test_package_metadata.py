@@ -52,7 +52,7 @@ class PackageMetadataTest(unittest.TestCase):
             'health_stable_seconds': '3.0',
             'health_max_message_age': '1.5',
             'health_accel_min': '5.0',
-            'health_accel_max': '15.0',
+            'health_accel_max': '20.0',
         }
         for launch_name in ('competition_takeoff.launch',
                             'firefighting.launch'):
@@ -91,8 +91,8 @@ class PackageMetadataTest(unittest.TestCase):
         self.assertIn('config', cmake)
         self.assertIn('config/px4/10016_iris.post', start_sitl)
         self.assertIn('cmp -s', start_sitl)
-        self.assertIn('EKF2_AID_MASK 264', px4_post)
-        self.assertIn('EKF2_MAG_TYPE 0', px4_post)
+        self.assertIn('EKF2_AID_MASK 280', px4_post)
+        self.assertIn('EKF2_MAG_TYPE 5', px4_post)
         self.assertIn('EKF2_MAG_ACCLIM 5.0', px4_post)
         self.assertIn('EKF2_MAGBIAS_ID 0', px4_post)
         self.assertIn('EKF2_MAGBIAS_X 0', px4_post)

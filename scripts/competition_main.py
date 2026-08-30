@@ -49,7 +49,7 @@ class CompetitionMainNode(object):
             max_message_age=rospy.get_param(
                 '~health_max_message_age', 1.5),
             accel_min=rospy.get_param('~health_accel_min', 5.0),
-            accel_max=rospy.get_param('~health_accel_max', 15.0),
+            accel_max=rospy.get_param('~health_accel_max', 20.0),
         )
         self.use_gazebo_ground_truth = rospy.get_param(
             '~use_gazebo_ground_truth', False)

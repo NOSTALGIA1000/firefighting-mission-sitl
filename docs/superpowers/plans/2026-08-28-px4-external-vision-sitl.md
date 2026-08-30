@@ -8,12 +8,14 @@
 
 **Tech Stack:** ROS Melodic, Python 2.7/3 compatible `rospy`, Gazebo 9 `ModelStates`, MAVROS `vision_pose/pose`, PX4 v1.11 EKF2.
 
-## Runtime findings (2026-08-29)
+## Runtime findings (2026-08-30)
 
-- PX4 now fuses Gazebo-backed external-vision position and velocity through `/mavros/odometry/out` (`EKF2_AID_MASK=264`).
+- PX4 now fuses Gazebo-backed external-vision position, velocity, and yaw through `/mavros/odometry/out` (`EKF2_AID_MASK=280`); SITL magnetometer fusion is disabled.
 - Seed 1 passed once end-to-end: no collision, `REACHED`, altitude `1.158-1.211m`, maximum pose disagreement `0.042m`.
 - Repeat runs still fail near safety nets with about `0.22m` MAVROS/Gazebo horizontal lag.
-- Current bridge rate is 30 Hz. Next experiment is 50 Hz, followed by two consecutive seed-1 passes.
+- Bridge rate is 50 Hz. ULog diagnosis found output predictor tracking error up to about `0.223m` position and `0.344m/s` velocity during in-place route-yaw alignment.
+- Position+yaw-only mask `24` increased Gazebo/MAVROS disagreement to about `0.43m`; experiment was reverted.
+- Next experiment: reduce `EKF2_TAU_POS` and `EKF2_TAU_VEL` within PX4-supported bounds, then repeat seed 1.
 - Four-seed matrix has not run. Treat this branch as a checkpoint, not completed acceptance.
 
 ## Global Constraints

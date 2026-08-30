@@ -24,7 +24,7 @@ class PreflightHealthGate(object):
     MAV_STATE_STANDBY = 3
 
     def __init__(self, stable_seconds=3.0, max_message_age=1.5,
-                 accel_min=5.0, accel_max=15.0):
+                 accel_min=5.0, accel_max=20.0):
         self.stable_seconds = float(stable_seconds)
         self.max_message_age = float(max_message_age)
         self.accel_min = float(accel_min)

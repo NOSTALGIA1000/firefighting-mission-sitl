@@ -16,7 +16,7 @@
   <arg name="health_stable_seconds" default="3.0"/>
   <arg name="health_max_message_age" default="1.5"/>
   <arg name="health_accel_min" default="5.0"/>
-  <arg name="health_accel_max" default="15.0"/>
+  <arg name="health_accel_max" default="20.0"/>
   <arg name="use_gazebo_ground_truth" default="true"/>
 
   <param name="/use_sim_time" value="true"/>

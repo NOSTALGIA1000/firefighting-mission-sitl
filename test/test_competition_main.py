@@ -71,7 +71,7 @@ class CompetitionMainTest(unittest.TestCase):
         accepted = gate.update(
             10.0,
             healthy_preflight_sample(
-                10.0, imu_linear_acceleration=(0.0, 0.0, 13.2)))
+                10.0, imu_linear_acceleration=(0.0, 0.0, 15.1)))
 
         self.assertTrue(accepted)
         self.assertEqual('ready', gate.reason)
@@ -89,7 +89,7 @@ class CompetitionMainTest(unittest.TestCase):
             ('acceleration_out_of_range', dict(
                 imu_linear_acceleration=(0.0, 0.0, 1.0))),
             ('acceleration_out_of_range', dict(
-                imu_linear_acceleration=(0.0, 0.0, 16.0))),
+                imu_linear_acceleration=(0.0, 0.0, 21.0))),
         )
 
         for reason, changes in cases:
