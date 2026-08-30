@@ -54,6 +54,28 @@ class CompetitionMainTest(unittest.TestCase):
         self.assertFalse(gate.update(14.0, healthy_preflight_sample(14.0)))
         self.assertTrue(gate.update(17.0, healthy_preflight_sample(17.0)))
 
+    def test_default_freshness_accepts_one_hertz_estimator_cadence(self):
+        gate = PreflightHealthGate(stable_seconds=3.0)
+
+        gate.update(10.0, healthy_preflight_sample(10.0))
+        accepted = gate.update(
+            11.1,
+            healthy_preflight_sample(11.1, estimator_received_at=10.0))
+
+        self.assertFalse(accepted)
+        self.assertEqual('stabilizing', gate.reason)
+
+    def test_default_acceleration_range_accepts_observed_sitl_noise(self):
+        gate = PreflightHealthGate(stable_seconds=0.0)
+
+        accepted = gate.update(
+            10.0,
+            healthy_preflight_sample(
+                10.0, imu_linear_acceleration=(0.0, 0.0, 13.2)))
+
+        self.assertTrue(accepted)
+        self.assertEqual('ready', gate.reason)
+
     def test_preflight_gate_rejects_each_invalid_input(self):
         cases = (
             ('disconnected', dict(connected=False)),
@@ -67,7 +89,7 @@ class CompetitionMainTest(unittest.TestCase):
             ('acceleration_out_of_range', dict(
                 imu_linear_acceleration=(0.0, 0.0, 1.0))),
             ('acceleration_out_of_range', dict(
-                imu_linear_acceleration=(0.0, 0.0, 13.0))),
+                imu_linear_acceleration=(0.0, 0.0, 16.0))),
         )
 
         for reason, changes in cases:

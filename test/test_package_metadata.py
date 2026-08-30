@@ -47,6 +47,39 @@ class PackageMetadataTest(unittest.TestCase):
         self.assertIn('PreflightSample(', node)
         self.assertIn('sensor_ready=preflight_ready', node)
 
+    def test_launches_configure_preflight_health_gate(self):
+        expected = {
+            'health_stable_seconds': '3.0',
+            'health_max_message_age': '1.5',
+            'health_accel_min': '5.0',
+            'health_accel_max': '15.0',
+        }
+        for launch_name in ('competition_takeoff.launch',
+                            'firefighting.launch'):
+            root = ET.parse(os.path.join(
+                PROJECT_ROOT, 'launch', launch_name)).getroot()
+            args = {item.attrib['name']: item.attrib.get('default')
+                    for item in root.findall('arg')}
+            self.assertEqual(
+                expected, {name: args[name] for name in expected})
+            node = next(
+                item for item in root.findall('node')
+                if item.attrib.get('type') == 'competition_main.py')
+            params = {item.attrib['name']: item.attrib.get('value')
+                      for item in node.findall('param')}
+            for name in expected:
+                self.assertEqual('$(arg %s)' % name, params[name])
+
+        smoke = ET.parse(os.path.join(
+            PROJECT_ROOT, 'test', 'visual_avoidance_smoke.test')).getroot()
+        competition = next(
+            item for item in smoke.findall('node')
+            if item.attrib.get('type') == 'competition_main.py')
+        smoke_params = {item.attrib['name']: item.attrib.get('value')
+                        for item in competition.findall('param')}
+        self.assertEqual(
+            expected, {name: smoke_params[name] for name in expected})
+
     def test_external_vision_bridge_is_installed_and_tested(self):
         cmake = self._read('CMakeLists.txt')
         start_sitl = self._read('scripts/start_sitl.sh')

@@ -39,6 +39,12 @@ Preflight is healthy only when all conditions hold:
 Any failed condition resets the stability timer. Missing estimator-status data is
 unhealthy (fail closed).
 
+VM calibration measured `/mavros/estimator_status` at approximately 1.000 Hz and
+`/mavros/imu/data` at approximately 50 Hz. Healthy stationary IMU samples reached
+about 13.17 m/s². Defaults therefore use a 1.5-second message age and 5.0–15.0
+m/s² acceleration range; the estimator flags and three-second continuous window
+remain the authoritative readiness checks.
+
 ## State-Machine Behavior
 
 - Before arming, failed health keeps `competition_main` in `WAIT_SENSOR`.

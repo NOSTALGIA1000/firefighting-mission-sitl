@@ -12,7 +12,7 @@
 
 - Fail closed when state, estimator, or IMU health data is missing or stale.
 - Require continuous health for 3.0 seconds by default.
-- Require stationary acceleration magnitude between 7.0 and 12.0 m/s² by default.
+- Require stationary acceleration magnitude between 5.0 and 15.0 m/s² by default.
 - Publish no setpoint, OFFBOARD request, or arm request while preflight is unhealthy.
 - Never suppress armed-flight setpoints because of preflight-health loss.
 - Keep ROS-independent logic testable without ROS imports.
@@ -103,8 +103,8 @@ PreflightSample = namedtuple(
 class PreflightHealthGate(object):
     MAV_STATE_STANDBY = 3
 
-    def __init__(self, stable_seconds=3.0, max_message_age=0.5,
-                 accel_min=7.0, accel_max=12.0):
+    def __init__(self, stable_seconds=3.0, max_message_age=1.5,
+                 accel_min=5.0, accel_max=15.0):
         self.stable_seconds = float(stable_seconds)
         self.max_message_age = float(max_message_age)
         self.accel_min = float(accel_min)
@@ -270,16 +270,16 @@ git commit -m "feat: gate OFFBOARD arming on estimator health"
 
 **Interfaces:**
 - Consumes: ROS parameters `health_stable_seconds`, `health_max_message_age`, `health_accel_min`, and `health_accel_max`.
-- Produces: launch defaults `3.0`, `0.5`, `7.0`, and `12.0` respectively.
+- Produces: launch defaults `3.0`, `1.5`, `5.0`, and `15.0` respectively.
 
 - [ ] **Step 1: Write failing launch-contract test**
 
 ```python
 expected = {
     'health_stable_seconds': '3.0',
-    'health_max_message_age': '0.5',
-    'health_accel_min': '7.0',
-    'health_accel_max': '12.0',
+    'health_max_message_age': '1.5',
+    'health_accel_min': '5.0',
+    'health_accel_max': '15.0',
 }
 ```
 
@@ -313,12 +313,12 @@ Add these exact arguments and matching node parameters to both launch files:
 
 ```xml
 <arg name="health_stable_seconds" default="3.0"/>
-<arg name="health_max_message_age" default="0.5"/>
-<arg name="health_accel_min" default="7.0"/>
-<arg name="health_accel_max" default="12.0"/>
+<arg name="health_max_message_age" default="1.5"/>
+<arg name="health_accel_min" default="5.0"/>
+<arg name="health_accel_max" default="15.0"/>
 ```
 
-Add direct values `3.0`, `0.5`, `7.0`, and `12.0` as node parameters in
+Add direct values `3.0`, `1.5`, `5.0`, and `15.0` as node parameters in
 `test/visual_avoidance_smoke.test`. Add handoff section titled
 `2026-08-30 PX4 起飞健康门禁` stating: preflight fails closed, defaults above,
 VM build/test evidence, and three consecutive seed-1 trials remain acceptance gate.

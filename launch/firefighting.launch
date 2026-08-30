@@ -13,6 +13,10 @@
   <arg name="points_topic" default="/fire_stereo/points"/>
   <arg name="transit_altitude" default="1.2"/>
   <arg name="prestream_count" default="120"/>
+  <arg name="health_stable_seconds" default="3.0"/>
+  <arg name="health_max_message_age" default="1.5"/>
+  <arg name="health_accel_min" default="5.0"/>
+  <arg name="health_accel_max" default="15.0"/>
   <arg name="use_gazebo_ground_truth" default="true"/>
 
   <param name="/use_sim_time" value="true"/>
@@ -56,6 +60,10 @@
     <param name="mavros_prefix" value="$(arg mavros_prefix)"/>
     <param name="takeoff_altitude" value="$(arg transit_altitude)"/>
     <param name="prestream_count" value="$(arg prestream_count)"/>
+    <param name="health_stable_seconds" value="$(arg health_stable_seconds)"/>
+    <param name="health_max_message_age" value="$(arg health_max_message_age)"/>
+    <param name="health_accel_min" value="$(arg health_accel_min)"/>
+    <param name="health_accel_max" value="$(arg health_accel_max)"/>
     <param name="use_gazebo_ground_truth" value="$(arg use_gazebo_ground_truth)"/>
   </node>
   <node pkg="firefighting_mission" type="mission_manager_node.py" name="mission_manager"
