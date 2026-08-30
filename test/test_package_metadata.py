@@ -64,6 +64,7 @@ class PackageMetadataTest(unittest.TestCase):
 
         bridge = self._read('scripts/gazebo_vision_bridge.py')
         self.assertIn('/mavros/odometry/out', bridge)
+        self.assertIn("get_param('~publish_rate', 50.0)", bridge)
         self.assertIn('nav_msgs.msg import Odometry', bridge)
         self.assertIn("message.header.frame_id = 'odom'", bridge)
         self.assertIn("message.child_frame_id = 'base_link'", bridge)
@@ -80,6 +81,21 @@ class PackageMetadataTest(unittest.TestCase):
             self.assertEqual(1, len(bridges), launch_name)
             self.assertEqual('$(arg use_gazebo_ground_truth)',
                              bridges[0].attrib.get('if'))
+            publish_rates = [param.attrib.get('value')
+                             for param in bridges[0].findall('param')
+                             if param.attrib.get('name') == 'publish_rate']
+            self.assertEqual(['50.0'], publish_rates, launch_name)
+
+        smoke = ET.parse(os.path.join(
+            PROJECT_ROOT, 'test', 'visual_avoidance_smoke.test')).getroot()
+        smoke_bridges = [node for node in smoke.findall('node')
+                         if node.attrib.get('type') ==
+                         'gazebo_vision_bridge.py']
+        self.assertEqual(1, len(smoke_bridges))
+        smoke_rates = [param.attrib.get('value')
+                       for param in smoke_bridges[0].findall('param')
+                       if param.attrib.get('name') == 'publish_rate']
+        self.assertEqual(['50.0'], smoke_rates)
 
     def test_roslaunch_nodes_are_checked_in_as_executable(self):
         for relative_path in ('scripts/start_sitl.sh',

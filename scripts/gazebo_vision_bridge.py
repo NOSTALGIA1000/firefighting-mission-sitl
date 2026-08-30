@@ -15,7 +15,7 @@ class GazeboVisionBridge(object):
         self.model_name = rospy.get_param('~model_name', 'iris_0')
         output_topic = rospy.get_param('~output_topic',
                                        '/mavros/odometry/out')
-        publish_rate = float(rospy.get_param('~publish_rate', 30.0))
+        publish_rate = float(rospy.get_param('~publish_rate', 50.0))
         if publish_rate <= 0.0:
             raise ValueError('~publish_rate must be positive')
 

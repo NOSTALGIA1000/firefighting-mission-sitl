@@ -22,7 +22,7 @@
   <node pkg="firefighting_mission" type="gazebo_vision_bridge.py"
         name="gazebo_vision_bridge" if="$(arg use_gazebo_ground_truth)" output="screen">
     <param name="model_name" value="iris_0"/>
-    <param name="publish_rate" value="30.0"/>
+    <param name="publish_rate" value="50.0"/>
   </node>
 
   <group if="$(eval arg('stereo_input_mode') == 'raw_stereo')" ns="fire_stereo">

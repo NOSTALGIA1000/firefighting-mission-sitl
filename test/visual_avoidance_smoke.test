@@ -9,7 +9,7 @@
   <node pkg="firefighting_mission" type="gazebo_vision_bridge.py"
         name="gazebo_vision_bridge" output="screen">
     <param name="model_name" value="iris_0"/>
-    <param name="publish_rate" value="30.0"/>
+    <param name="publish_rate" value="50.0"/>
   </node>
   <node pkg="firefighting_mission" type="competition_main.py"
         name="competition_main" output="screen" required="true">
