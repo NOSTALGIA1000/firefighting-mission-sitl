@@ -128,7 +128,9 @@ class CompetitionMain(object):
             self.state = 'WAIT_FCU'
             return ControllerOutputs(self.state, [], [], False)
 
-        if not sensor_ready:
+        if not sensor_ready and not armed:
+            self._setpoint_count = 0
+            self._last_mode_request_time = None
             self.state = 'WAIT_SENSOR'
             return ControllerOutputs(self.state, [], [], False)
 

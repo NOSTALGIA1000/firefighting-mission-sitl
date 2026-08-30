@@ -36,6 +36,17 @@ class PackageMetadataTest(unittest.TestCase):
         self.assertIn('catkin_add_nosetests(test/test_competition_main.py)',
                       cmake)
 
+    def test_competition_node_connects_preflight_health_gate(self):
+        node = self._read('scripts/competition_main.py')
+
+        self.assertIn('from mavros_msgs.msg import EstimatorStatus, State', node)
+        self.assertIn("'/estimator_status'", node)
+        self.assertIn('self.estimator_received_at =', node)
+        self.assertIn('self.imu_received_at =', node)
+        self.assertIn('PreflightHealthGate(', node)
+        self.assertIn('PreflightSample(', node)
+        self.assertIn('sensor_ready=preflight_ready', node)
+
     def test_external_vision_bridge_is_installed_and_tested(self):
         cmake = self._read('CMakeLists.txt')
         start_sitl = self._read('scripts/start_sitl.sh')

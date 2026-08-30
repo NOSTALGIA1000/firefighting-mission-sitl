@@ -7,11 +7,13 @@ import rospy
 from gazebo_msgs.msg import ModelStates
 from geometry_msgs.msg import PoseStamped
 from sensor_msgs.msg import Imu
-from mavros_msgs.msg import State
+from mavros_msgs.msg import EstimatorStatus, State
 from mavros_msgs.srv import CommandBool, SetMode
 from std_msgs.msg import String
 
 from firefighting_mission.competition_main import (CompetitionMain,
+                                                    PreflightHealthGate,
+                                                    PreflightSample,
                                                     PositionSetpoint,
                                                     select_active_setpoints)
 from firefighting_mission.path_planner import map_target_to_local
@@ -38,6 +40,17 @@ class CompetitionMainNode(object):
         self.pose = None
         self.map_pose = None
         self.imu = None
+        self.imu_received_at = None
+        self.estimator_status = None
+        self.estimator_received_at = None
+        self.preflight_gate = PreflightHealthGate(
+            stable_seconds=rospy.get_param(
+                '~health_stable_seconds', 3.0),
+            max_message_age=rospy.get_param(
+                '~health_max_message_age', 0.5),
+            accel_min=rospy.get_param('~health_accel_min', 7.0),
+            accel_max=rospy.get_param('~health_accel_max', 12.0),
+        )
         self.use_gazebo_ground_truth = rospy.get_param(
             '~use_gazebo_ground_truth', False)
         self.gazebo_model_name = rospy.get_param(
@@ -59,6 +72,8 @@ class CompetitionMainNode(object):
         rospy.Subscriber(self.mavros_prefix + '/local_position/pose',
                          PoseStamped, self._pose)
         rospy.Subscriber(self.mavros_prefix + '/imu/data', Imu, self._imu)
+        rospy.Subscriber(self.mavros_prefix + '/estimator_status',
+                         EstimatorStatus, self._estimator_status)
         rospy.Subscriber('/fire_mission/path_setpoint', PoseStamped,
                          self._path_setpoint)
         rospy.Subscriber('/xtdrone/iris_0/cmd', String,
@@ -78,6 +93,49 @@ class CompetitionMainNode(object):
 
     def _imu(self, message):
         self.imu = message
+        self.imu_received_at = rospy.Time.now().to_sec()
+
+    def _estimator_status(self, message):
+        self.estimator_status = message
+        self.estimator_received_at = rospy.Time.now().to_sec()
+
+    @staticmethod
+    def _vector_tuple(vector):
+        return (vector.x, vector.y, vector.z)
+
+    def _preflight_sample(self):
+        if self.imu is None:
+            orientation = (0.0, 0.0, 0.0, 0.0)
+            angular_velocity = (0.0, 0.0, 0.0)
+            linear_acceleration = (0.0, 0.0, 0.0)
+        else:
+            orientation = (
+                self.imu.orientation.x,
+                self.imu.orientation.y,
+                self.imu.orientation.z,
+                self.imu.orientation.w,
+            )
+            angular_velocity = self._vector_tuple(
+                self.imu.angular_velocity)
+            linear_acceleration = self._vector_tuple(
+                self.imu.linear_acceleration)
+        estimator = self.estimator_status
+        return PreflightSample(
+            connected=self.state.connected,
+            armed=self.state.armed,
+            system_status=self.state.system_status,
+            estimator_received_at=self.estimator_received_at,
+            estimator_attitude_valid=bool(
+                estimator is not None and
+                estimator.attitude_status_flag),
+            estimator_accel_error=bool(
+                estimator is not None and
+                estimator.accel_error_status_flag),
+            imu_received_at=self.imu_received_at,
+            imu_orientation=orientation,
+            imu_angular_velocity=angular_velocity,
+            imu_linear_acceleration=linear_acceleration,
+        )
 
     def _model_states(self, message):
         try:
@@ -168,13 +226,20 @@ class CompetitionMainNode(object):
         if self.use_gazebo_ground_truth and self.map_pose is None:
             self.phase_pub.publish('WAIT_MAP')
             return
+        now = rospy.Time.now().to_sec()
+        preflight_ready = self.preflight_gate.update(
+            now, self._preflight_sample())
+        if not preflight_ready and not self.state.armed:
+            rospy.logwarn_throttle(
+                1.0, 'preflight health blocked: %s',
+                self.preflight_gate.reason)
         outputs = self.controller.tick(
-            rospy.Time.now().to_sec(),
+            now,
             connected=self.state.connected,
             armed=self.state.armed,
             mode=self.state.mode,
             altitude=self._altitude(),
-            sensor_ready=self.imu is not None,
+            sensor_ready=preflight_ready,
             local_pose_available=self.pose is not None,
         )
         if outputs.state == 'HOVER' and self.path_setpoint is not None:

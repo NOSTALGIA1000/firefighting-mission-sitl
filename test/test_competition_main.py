@@ -105,6 +105,36 @@ class CompetitionMainTest(unittest.TestCase):
         self.assertEqual([], outputs.mode_requests)
         self.assertFalse(outputs.arm_request)
 
+    def test_health_loss_before_arm_resets_prestream_count(self):
+        controller = CompetitionMain(takeoff_altitude=1.2,
+                                     prestream_count=2)
+
+        controller.tick(0.0, connected=True, armed=False, mode='',
+                        altitude=0.0, sensor_ready=True)
+        blocked = controller.tick(
+            0.1, connected=True, armed=False, mode='', altitude=0.0,
+            sensor_ready=False)
+        restarted = controller.tick(
+            0.2, connected=True, armed=False, mode='', altitude=0.0,
+            sensor_ready=True)
+
+        self.assertEqual('WAIT_SENSOR', blocked.state)
+        self.assertEqual([], blocked.setpoints)
+        self.assertEqual([], restarted.mode_requests)
+
+    def test_armed_flight_keeps_setpoints_after_preflight_health_loss(self):
+        controller = CompetitionMain(takeoff_altitude=1.2,
+                                     prestream_count=1)
+
+        outputs = controller.tick(
+            1.0, connected=True, armed=True, mode='OFFBOARD', altitude=1.0,
+            sensor_ready=False)
+
+        self.assertEqual('TAKEOFF', outputs.state)
+        self.assertEqual(1, len(outputs.setpoints))
+        self.assertEqual(PositionSetpoint(0.0, 0.0, 1.2),
+                         outputs.setpoints[0])
+
     def test_can_prestream_before_local_pose_is_available_after_sensor_ready(self):
         controller = CompetitionMain(takeoff_altitude=1.2, prestream_count=3)
 
