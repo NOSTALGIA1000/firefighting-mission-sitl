@@ -1,5 +1,6 @@
 from __future__ import division, print_function
 
+import math
 from collections import namedtuple
 
 
@@ -12,6 +13,70 @@ class PositionSetpoint(namedtuple('_PositionSetpoint', 'x y z yaw')):
 ModeRequest = namedtuple('ModeRequest', 'mode')
 ControllerOutputs = namedtuple(
     'ControllerOutputs', 'state setpoints mode_requests arm_request')
+PreflightSample = namedtuple(
+    'PreflightSample',
+    'connected armed system_status estimator_received_at '
+    'estimator_attitude_valid estimator_accel_error imu_received_at '
+    'imu_orientation imu_angular_velocity imu_linear_acceleration')
+
+
+class PreflightHealthGate(object):
+    MAV_STATE_STANDBY = 3
+
+    def __init__(self, stable_seconds=3.0, max_message_age=0.5,
+                 accel_min=7.0, accel_max=12.0):
+        self.stable_seconds = float(stable_seconds)
+        self.max_message_age = float(max_message_age)
+        self.accel_min = float(accel_min)
+        self.accel_max = float(accel_max)
+        self._healthy_since = None
+        self.reason = 'not_checked'
+
+    @staticmethod
+    def _values_are_finite(values):
+        return all(not math.isnan(value) and not math.isinf(value)
+                   for value in values)
+
+    def _rejection_reason(self, now, sample):
+        if not sample.connected:
+            return 'disconnected'
+        if (not sample.armed and
+                sample.system_status != self.MAV_STATE_STANDBY):
+            return 'px4_not_standby'
+        if (sample.estimator_received_at is None or
+                now - sample.estimator_received_at > self.max_message_age):
+            return 'estimator_stale'
+        if not sample.estimator_attitude_valid:
+            return 'attitude_invalid'
+        if sample.estimator_accel_error:
+            return 'accelerometer_error'
+        if (sample.imu_received_at is None or
+                now - sample.imu_received_at > self.max_message_age):
+            return 'imu_stale'
+        values = (sample.imu_orientation + sample.imu_angular_velocity +
+                  sample.imu_linear_acceleration)
+        if not self._values_are_finite(values):
+            return 'imu_non_finite'
+        acceleration = math.sqrt(sum(
+            value * value for value in sample.imu_linear_acceleration))
+        if not self.accel_min <= acceleration <= self.accel_max:
+            return 'acceleration_out_of_range'
+        return None
+
+    def update(self, now, sample):
+        now = float(now)
+        reason = self._rejection_reason(now, sample)
+        if reason is not None:
+            self._healthy_since = None
+            self.reason = reason
+            return False
+        if self._healthy_since is None:
+            self._healthy_since = now
+        if now - self._healthy_since < self.stable_seconds:
+            self.reason = 'stabilizing'
+            return False
+        self.reason = 'ready'
+        return True
 
 
 def mission_interface_topics():

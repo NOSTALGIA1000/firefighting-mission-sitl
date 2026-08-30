@@ -11,12 +11,72 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, 'src'))
 
 from firefighting_mission.competition_main import (CompetitionMain,
                                                     ModeRequest,
+                                                    PreflightHealthGate,
+                                                    PreflightSample,
                                                     PositionSetpoint,
                                                     mission_interface_topics,
                                                     select_active_setpoints)
 
 
+def healthy_preflight_sample(now, **changes):
+    values = dict(
+        connected=True,
+        armed=False,
+        system_status=3,
+        estimator_received_at=now,
+        estimator_attitude_valid=True,
+        estimator_accel_error=False,
+        imu_received_at=now,
+        imu_orientation=(0.0, 0.0, 0.0, 1.0),
+        imu_angular_velocity=(0.0, 0.0, 0.0),
+        imu_linear_acceleration=(0.0, 0.0, 9.81),
+    )
+    values.update(changes)
+    return PreflightSample(**values)
+
+
 class CompetitionMainTest(unittest.TestCase):
+    def test_preflight_gate_requires_continuous_health_window(self):
+        gate = PreflightHealthGate(stable_seconds=3.0)
+
+        self.assertFalse(gate.update(10.0, healthy_preflight_sample(10.0)))
+        self.assertFalse(gate.update(12.9, healthy_preflight_sample(12.9)))
+        self.assertTrue(gate.update(13.0, healthy_preflight_sample(13.0)))
+        self.assertEqual('ready', gate.reason)
+
+    def test_unhealthy_sample_resets_preflight_health_window(self):
+        gate = PreflightHealthGate(stable_seconds=3.0)
+
+        gate.update(10.0, healthy_preflight_sample(10.0))
+        gate.update(12.0, healthy_preflight_sample(
+            12.0, estimator_accel_error=True))
+
+        self.assertFalse(gate.update(14.0, healthy_preflight_sample(14.0)))
+        self.assertTrue(gate.update(17.0, healthy_preflight_sample(17.0)))
+
+    def test_preflight_gate_rejects_each_invalid_input(self):
+        cases = (
+            ('disconnected', dict(connected=False)),
+            ('px4_not_standby', dict(system_status=2)),
+            ('estimator_stale', dict(estimator_received_at=9.0)),
+            ('attitude_invalid', dict(estimator_attitude_valid=False)),
+            ('accelerometer_error', dict(estimator_accel_error=True)),
+            ('imu_stale', dict(imu_received_at=9.0)),
+            ('imu_non_finite', dict(imu_orientation=(
+                0.0, 0.0, 0.0, float('nan')))),
+            ('acceleration_out_of_range', dict(
+                imu_linear_acceleration=(0.0, 0.0, 1.0))),
+            ('acceleration_out_of_range', dict(
+                imu_linear_acceleration=(0.0, 0.0, 13.0))),
+        )
+
+        for reason, changes in cases:
+            gate = PreflightHealthGate(stable_seconds=0.0,
+                                       max_message_age=0.5)
+            self.assertFalse(gate.update(
+                10.0, healthy_preflight_sample(10.0, **changes)))
+            self.assertEqual(reason, gate.reason)
+
     def test_planned_setpoint_preserves_yaw(self):
         point = PositionSetpoint(1.0, 2.0, 1.2, 1.5708)
 
