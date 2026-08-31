@@ -29,6 +29,7 @@ class VisualPlannerConfig(object):
                  dynamic_obstacle_radius=0.10,
                  dynamic_localization_margin=0.10,
                  maximum_dynamic_obstacles=4,
+                 blocked_route_retry_limit=40,
                  geofence_warning_margin=0.35,
                  geofence_recovery_margin=0.55,
                  geofence_recovery_tolerance=0.05):
@@ -53,6 +54,7 @@ class VisualPlannerConfig(object):
         self.dynamic_obstacle_radius = float(dynamic_obstacle_radius)
         self.dynamic_localization_margin = float(dynamic_localization_margin)
         self.maximum_dynamic_obstacles = int(maximum_dynamic_obstacles)
+        self.blocked_route_retry_limit = int(blocked_route_retry_limit)
         self.geofence_warning_margin = float(geofence_warning_margin)
         self.geofence_recovery_margin = float(geofence_recovery_margin)
         self.geofence_recovery_tolerance = float(
@@ -178,6 +180,7 @@ class VisualPathPlanner(object):
         self.global_obstacle_candidate = None
         self.global_observation_count = 0
         self.hold_reason = ''
+        self.blocked_route_retries = 0
 
     @staticmethod
     def _dynamic_route(start, goal, circles):
@@ -186,31 +189,83 @@ class VisualPathPlanner(object):
     def set_goal(self, goal, pose):
         self.goal = (float(goal[0]), float(goal[1]), self.config.altitude)
         start = (float(pose[0]), float(pose[1]))
-        self.route = tuple(self._plan_with_memory(start))
-        self.waypoint_index = 1 if len(self.route) > 1 else 0
-        self.state = 'FOLLOW_ROUTE'
         self.selected_side = ''
         self.active_obstacle = None
         self.interrupted_state = None
         self.hold_target = None
         self.hold_yaw = None
-        self.hold_reason = ''
         self._reset_global_candidate()
+        try:
+            self.route = tuple(self._plan_with_memory(start))
+        except ValueError:
+            if not self.temporary_obstacles:
+                raise
+            # Remembered geometry blocks the new leg.  Hold and let the
+            # retry path work it out instead of losing the memory or the
+            # goal outright.
+            self.route = ()
+            self.waypoint_index = 0
+            self.state = 'HOLD_UNSAFE'
+            self.hold_reason = 'dynamic_route_unreachable'
+            self.blocked_route_retries = 0
+            return
+        self.waypoint_index = 1 if len(self.route) > 1 else 0
+        self.state = 'FOLLOW_ROUTE'
+        self.hold_reason = ''
+        self.blocked_route_retries = 0
 
     def _plan_with_memory(self, start):
         """Plan to the active goal around every cylinder learned so far.
 
-        Dropping the memory here would leave the new leg following a route
-        that ignores a known cylinder, which is exactly the case the
-        suppressed local stop assumes cannot happen.
+        Ignoring the memory here would leave the new leg following a route
+        that passes through a known cylinder, which is exactly the case the
+        suppressed local stop assumes cannot happen, so a blocked route is
+        raised to the caller rather than quietly downgraded.
         """
         if self.dynamic_route_provider is None or not self.temporary_obstacles:
             return self.route_provider(start, self.goal[:2])
+        return self.dynamic_route_provider(
+            start, self.goal[:2], self.temporary_obstacles)
+
+    def _shrink_remembered_margin(self):
+        """Trim the localisation margin off remembered circles.
+
+        Forgetting a circle outright once drove the aircraft into a real
+        cylinder, so a wedge is worked out by giving back margin instead:
+        the circles keep their centres and never shrink below the physical
+        cylinder radius, so a route that is genuinely blocked stays blocked.
+        """
+        floor = self.config.dynamic_obstacle_radius
+        self.temporary_obstacles = tuple(
+            (x_value, y_value, max(floor, radius * 0.8))
+            for x_value, y_value, radius in self.temporary_obstacles)
+
+    def _retry_blocked_route(self, pose):
+        """Try to leave a blocked-route hold, or return None to keep holding.
+
+        Holding forever loses the run, so the hold keeps replanning, and
+        after ``blocked_route_retry_limit`` consecutive failures it gives
+        back some of the remembered localisation margin.
+        """
         try:
-            return self.dynamic_route_provider(
-                start, self.goal[:2], self.temporary_obstacles)
+            route = tuple(self._plan_with_memory(
+                (float(pose[0]), float(pose[1]))))
         except ValueError:
-            return self.route_provider(start, self.goal[:2])
+            self.blocked_route_retries += 1
+            if (self.blocked_route_retries >=
+                    self.config.blocked_route_retry_limit):
+                self.blocked_route_retries = 0
+                self._shrink_remembered_margin()
+            return None
+        self.blocked_route_retries = 0
+        self.route = route
+        self.waypoint_index = 1 if len(self.route) > 1 else 0
+        self.state = 'FOLLOW_ROUTE'
+        self.selected_side = ''
+        self.active_obstacle = None
+        self._clear_hold()
+        self._reset_global_candidate()
+        return self._follow_route(pose, 'blocked_route_recovered')
 
     @staticmethod
     def _horizontal_distance(first, second):
@@ -620,6 +675,9 @@ class VisualPathPlanner(object):
 
         if self.state == 'HOLD_UNSAFE':
             if self.hold_reason == 'dynamic_route_unreachable':
+                recovered = self._retry_blocked_route(pose)
+                if recovered is not None:
+                    return recovered
                 return self._hold(
                     pose, 'dynamic_route_unreachable', remember=False)
             if nearest is None:

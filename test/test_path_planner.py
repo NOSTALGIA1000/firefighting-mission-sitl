@@ -387,6 +387,86 @@ class VisualPathPlannerTest(unittest.TestCase):
 
         self.assertEqual([], calls)
 
+    def test_unreachable_hold_retries_instead_of_wedging_the_mission(self):
+        """A blocked dynamic route must not end the run.
+
+        One false detection used to latch HOLD_UNSAFE for good, because the
+        hold branch returned without ever asking the planner again.
+        """
+        attempts = []
+
+        def dynamic_route(start, goal, circles):
+            attempts.append(tuple(circles))
+            if len(attempts) < 3:
+                raise ValueError('route_unreachable')
+            return (tuple(start), tuple(goal))
+
+        planner = planner_with_goal(dynamic_route_provider=dynamic_route)
+        planner._remember_obstacle((1.00, 0.00, 0.20))
+        planner.state = 'HOLD_UNSAFE'
+        planner.hold_reason = 'dynamic_route_unreachable'
+
+        planner.update(POSE, (), True, 1.0)
+        planner.update(POSE, (), True, 1.1)
+        command = planner.update(POSE, (), True, 1.2)
+
+        self.assertEqual('FOLLOW_ROUTE', command.state)
+        self.assertEqual('blocked_route_recovered', command.reason)
+
+    def test_sustained_wedge_gives_back_localisation_margin(self):
+        """Margin is what gets returned, never the obstacle itself.
+
+        Deleting a circle once flew the aircraft into a real cylinder, so a
+        wedge trims the margin down towards the physical cylinder radius and
+        stops there.
+        """
+        def dynamic_route(start, goal, circles):
+            if any(circle[2] > 0.11 for circle in circles):
+                raise ValueError('route_unreachable')
+            return (tuple(start), tuple(goal))
+
+        config = VisualPlannerConfig(geofence_warning_margin=-10.0)
+        config.blocked_route_retry_limit = 1
+        planner = planner_with_goal(config=config,
+                                    dynamic_route_provider=dynamic_route)
+        planner._remember_obstacle((1.00, 0.00, 0.20))
+        planner.state = 'HOLD_UNSAFE'
+        planner.hold_reason = 'dynamic_route_unreachable'
+
+        for index in range(6):
+            command = planner.update(POSE, (), True, 1.0 + 0.1 * index)
+
+        self.assertEqual('FOLLOW_ROUTE', command.state)
+        self.assertEqual(1, len(planner.temporary_obstacles))
+        self.assertGreaterEqual(planner.temporary_obstacles[0][2], 0.10)
+        self.assertLess(planner.temporary_obstacles[0][2], 0.20)
+
+    def test_remembered_circles_never_shrink_below_the_cylinder(self):
+        planner = planner_with_goal()
+        planner._remember_obstacle((1.00, 0.00, 0.20))
+
+        for _ in range(20):
+            planner._shrink_remembered_margin()
+
+        self.assertAlmostEqual(0.10, planner.temporary_obstacles[0][2],
+                               places=6)
+
+    def test_short_wedge_keeps_every_remembered_circle(self):
+        def dynamic_route(start, goal, circles):
+            if circles:
+                raise ValueError('route_unreachable')
+            return (tuple(start), tuple(goal))
+
+        planner = planner_with_goal(dynamic_route_provider=dynamic_route)
+        planner._remember_obstacle((1.00, 0.00, 0.20))
+        planner.state = 'HOLD_UNSAFE'
+        planner.hold_reason = 'dynamic_route_unreachable'
+
+        command = planner.update(POSE, (), True, 1.0)
+
+        self.assertEqual('HOLD_UNSAFE', command.state)
+        self.assertEqual(1, len(planner.temporary_obstacles))
+
     def test_remembered_cylinder_still_brakes_inside_emergency_range(self):
         far_obstacle = OBSTACLE._replace(
             forward_m=1.40, nearest_range_m=1.35)
