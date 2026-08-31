@@ -38,7 +38,11 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
         self.collision = False
         self.first_collision_pose = None
         self.gazebo_pose = None
+        self.gazebo_yaw = None
+        self.gazebo_angular_velocity = None
         self.first_collision_gazebo_pose = None
+        self.first_collision_gazebo_yaw = None
+        self.first_collision_gazebo_angular_velocity = None
         self.last_setpoint = None
         self.first_collision_setpoint = None
         self.first_collision_controller_state = None
@@ -83,6 +87,9 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
                 'clearances': self.clearances,
                 'pose': self.last_pose,
                 'yaw': self.last_yaw,
+                'gazebo_yaw': self.gazebo_yaw,
+                'target': (message.target.x, message.target.y,
+                           message.target.z, message.target_yaw),
                 'obstacles': list(self.obstacles),
             })
             self.last_avoidance_state = message.state
@@ -97,6 +104,9 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
         if colliding and not self.collision:
             self.first_collision_pose = self.last_pose
             self.first_collision_gazebo_pose = self.gazebo_pose
+            self.first_collision_gazebo_yaw = self.gazebo_yaw
+            self.first_collision_gazebo_angular_velocity = \
+                self.gazebo_angular_velocity
             self.first_collision_setpoint = self.last_setpoint
             self.first_collision_controller_state = self.controller_state
         self.collision = self.collision or colliding
@@ -120,6 +130,13 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
             return
         point = message.pose[index].position
         self.gazebo_pose = (point.x, point.y, point.z)
+        orientation = message.pose[index].orientation
+        self.gazebo_yaw = math.atan2(
+            2.0 * (orientation.w * orientation.z +
+                   orientation.x * orientation.y),
+            1.0 - 2.0 * (orientation.y * orientation.y +
+                         orientation.z * orientation.z))
+        self.gazebo_angular_velocity = message.twist[index].angular.z
         self._record_pose_alignment()
 
     def _obstacles(self, message):
@@ -223,6 +240,9 @@ class VisualAvoidanceSmokeTest(unittest.TestCase):
             'contact_pairs': self.contact_pairs,
             'first_collision_pose': self.first_collision_pose,
             'first_collision_gazebo_pose': self.first_collision_gazebo_pose,
+            'first_collision_gazebo_yaw': self.first_collision_gazebo_yaw,
+            'first_collision_gazebo_angular_velocity': (
+                self.first_collision_gazebo_angular_velocity),
             'first_collision_setpoint': self.first_collision_setpoint,
             'first_collision_controller_state': (
                 self.first_collision_controller_state),

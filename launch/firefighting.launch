@@ -11,7 +11,8 @@
   <arg name="depth_topic" default="/fire_stereo/depth/image_raw"/>
   <arg name="camera_info_topic" default="/fire_stereo/depth/camera_info"/>
   <arg name="points_topic" default="/fire_stereo/points"/>
-  <arg name="transit_altitude" default="1.2"/>
+  <arg name="transit_altitude" default="1.25"/>
+  <arg name="altitude_tolerance" default="0.15"/>
   <arg name="prestream_count" default="120"/>
   <arg name="health_stable_seconds" default="3.0"/>
   <arg name="health_max_message_age" default="1.5"/>
@@ -53,6 +54,7 @@
   <node pkg="firefighting_mission" type="path_planner.py" name="path_planner" output="screen">
     <param name="mavros_prefix" value="$(arg mavros_prefix)"/>
     <param name="transit_altitude" value="$(arg transit_altitude)"/>
+    <param name="altitude_tolerance" value="$(arg altitude_tolerance)"/>
     <param name="use_gazebo_ground_truth" value="$(arg use_gazebo_ground_truth)"/>
   </node>
   <node pkg="firefighting_mission" type="competition_main.py" name="competition_main"

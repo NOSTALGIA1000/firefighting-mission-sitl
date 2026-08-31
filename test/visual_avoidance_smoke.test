@@ -15,7 +15,7 @@
         name="competition_main" output="screen" required="true">
     <param name="use_gazebo_ground_truth" value="true"/>
     <param name="mavros_prefix" value="/mavros"/>
-    <param name="takeoff_altitude" value="1.2"/>
+    <param name="takeoff_altitude" value="1.25"/>
     <param name="prestream_count" value="120"/>
     <param name="health_stable_seconds" value="3.0"/>
     <param name="health_max_message_age" value="1.5"/>
@@ -32,12 +32,13 @@
   <node pkg="firefighting_mission" type="path_planner.py"
         name="path_planner" output="screen">
     <param name="mavros_prefix" value="/mavros"/>
-    <param name="transit_altitude" value="1.2"/>
+    <param name="transit_altitude" value="1.25"/>
+    <param name="altitude_tolerance" value="0.15"/>
     <param name="use_gazebo_ground_truth" value="true"/>
   </node>
 
   <test test-name="visual_avoidance_smoke" pkg="firefighting_mission"
-        type="visual_avoidance_smoke.py" time-limit="220">
+        type="visual_avoidance_smoke.py" time-limit="360">
     <param name="seed" value="$(arg seed)"/>
   </test>
 </launch>

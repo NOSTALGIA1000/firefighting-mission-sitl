@@ -244,6 +244,20 @@ class CompetitionMainTest(unittest.TestCase):
 
         self.assertEqual([planned], selected)
 
+    def test_hover_handoff_stays_latched_during_altitude_disturbance(self):
+        controller = CompetitionMain(takeoff_altitude=1.2,
+                                     hover_hold_seconds=0.3,
+                                     prestream_count=1)
+        controller.tick(0.0, connected=True, armed=True,
+                        mode='OFFBOARD', altitude=1.2)
+        hover = controller.tick(0.4, connected=True, armed=True,
+                                mode='OFFBOARD', altitude=1.2)
+        disturbed = controller.tick(0.5, connected=True, armed=True,
+                                    mode='OFFBOARD', altitude=1.05)
+
+        self.assertEqual('HOVER', hover.state)
+        self.assertEqual('HOVER', disturbed.state)
+
     def test_default_takeoff_setpoint_remains_before_path_handoff(self):
         controller = CompetitionMain(takeoff_altitude=1.2, prestream_count=1)
         outputs = controller.tick(1.0, connected=True, armed=True,
@@ -275,6 +289,9 @@ class CompetitionMainTest(unittest.TestCase):
         competition = next(node for node in root.findall('node')
                            if node.attrib.get('type') == 'competition_main.py')
         self.assertEqual('true', competition.attrib.get('required'))
+        altitude = next(arg for arg in root.findall('arg')
+                        if arg.attrib.get('name') == 'takeoff_altitude')
+        self.assertEqual('1.25', altitude.attrib.get('default'))
 
     def test_takeoff_launch_uses_stereo_equipped_fire_iris(self):
         root = ET.parse(os.path.join(PROJECT_ROOT, 'launch',

@@ -149,6 +149,9 @@ class CompetitionMain(object):
             self.state = 'ARM'
             return self._outputs([], True)
 
+        if self.state == 'HOVER':
+            return self._outputs()
+
         if abs(float(altitude) - self.takeoff_altitude) <= self.hover_tolerance:
             if self._hover_since is None:
                 self._hover_since = float(now)

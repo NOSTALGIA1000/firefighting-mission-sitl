@@ -8,8 +8,10 @@ package_root="$(rospack find firefighting_mission)"
 default_sdf="$package_root/models/fire_iris/fire_iris.sdf"
 sdf="${4:-$default_sdf}"
 spawn_z="${5:-0.2}"
+spawn_yaw="${6:--1.5707963}"
 case "$sdf" in __*:=*) sdf="$default_sdf" ;; esac
 case "$spawn_z" in __*:=*) spawn_z="0.2" ;; esac
+case "$spawn_yaw" in __*:=*) spawn_yaw="-1.5707963" ;; esac
 px4_root="${PX4_FIRMWARE_DIR:-/home/ss/PX4_Firmware}"
 vision_post_source="$package_root/config/px4/10016_iris.post"
 vision_post_target="$px4_root/ROMFS/px4fmu_common/init.d-posix/10016_iris.post"
@@ -30,5 +32,5 @@ source "$px4_root/Tools/setup_gazebo.bash" "$px4_root" \
 
 python "$package_root/scripts/generate_world.py" --seed "$seed" --output "$world"
 exec roslaunch "$px4_root/launch/mavros_posix_sitl.launch" vehicle:=iris "world:=$world" \
-  "sdf:=$sdf" "gui:=$gui" "z:=$spawn_z" interactive:=false \
+  "sdf:=$sdf" "gui:=$gui" "z:=$spawn_z" "Y:=$spawn_yaw" interactive:=false \
   "verbose:=${GAZEBO_VERBOSE:-false}"
