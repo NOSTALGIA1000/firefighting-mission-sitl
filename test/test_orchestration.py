@@ -100,9 +100,14 @@ class OrchestrationTest(unittest.TestCase):
                                'path_planner.py'), 'r') as handle:
             planner_node = handle.read()
 
-        self.assertIn("'~maximum_horizontal_speed', 0.20", planner_node)
-        self.assertIn("'~maximum_setpoint_lead', 0.08", planner_node)
-        self.assertIn("'~maximum_yaw_rate', 0.15", planner_node)
+        self.assertIn("'~maximum_horizontal_speed', 0.18", planner_node)
+        self.assertIn("'~maximum_turning_speed', 0.12", planner_node)
+        self.assertIn("'~maximum_setpoint_lead', 0.25", planner_node)
+        self.assertIn("'~maximum_yaw_rate', 0.35", planner_node)
+        self.assertIn("'~yaw_alignment_tolerance', 0.20", planner_node)
+        self.assertIn("'~geofence_warning_margin', 0.45", planner_node)
+        self.assertIn("'~geofence_recovery_margin', 0.65", planner_node)
+        self.assertIn("'~altitude_tolerance', 0.15", planner_node)
         self.assertIn("'HOLD_UNSAFE', 'REACHED'", planner_node)
 
     def test_sitl_control_aligns_gazebo_map_to_px4_local_frame(self):
@@ -202,9 +207,12 @@ class OrchestrationTest(unittest.TestCase):
                       wrapper)
         self.assertIn('sdf="${4:-$default_sdf}"', wrapper)
         self.assertIn('spawn_z="${5:-0.2}"', wrapper)
+        self.assertIn('spawn_yaw="${6:--1.5707963}"', wrapper)
         self.assertIn('"z:=$spawn_z"', wrapper)
+        self.assertIn('"Y:=$spawn_yaw"', wrapper)
         self.assertIn('case "$sdf" in __*:=*)', wrapper)
         self.assertIn('case "$spawn_z" in __*:=*)', wrapper)
+        self.assertIn('case "$spawn_yaw" in __*:=*)', wrapper)
 
     def test_completion_waits_for_recorder_ack_and_bag_flush(self):
         with open(os.path.join(PROJECT_ROOT, 'scripts',

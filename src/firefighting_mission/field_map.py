@@ -78,14 +78,21 @@ def point_matches_field_boundary(point, tolerance=0.18):
 
 
 def _segment_is_free(first, second, inflation, dynamic_circles,
-                     sample_step=0.025):
+                     sample_step=0.025, extra=0.0):
+    """Sample a segment for clearance.
+
+    ``inflation`` may be a float or a callable returning the required
+    clearance at a point, which lets the caller taper the margin along the
+    route.  ``extra`` is added on top of whichever value applies.
+    """
+    resolve = inflation if callable(inflation) else (lambda _point: inflation)
     distance = math.hypot(second[0] - first[0], second[1] - first[1])
     sample_count = max(1, int(math.ceil(distance / float(sample_step))))
     for index in range(1, sample_count + 1):
         ratio = index / float(sample_count)
         point = (first[0] + (second[0] - first[0]) * ratio,
                  first[1] + (second[1] - first[1]) * ratio)
-        if not point_is_free(point, inflation, dynamic_circles):
+        if not point_is_free(point, resolve(point) + extra, dynamic_circles):
             return False
     return True
 
@@ -100,7 +107,7 @@ def simplify_route(points, inflation=0.45, dynamic_circles=()):
         candidate = final
         while candidate > anchor + 1:
             if _segment_is_free(points[anchor], points[candidate],
-                                inflation + 0.12, dynamic_circles):
+                                inflation, dynamic_circles, extra=0.12):
                 break
             candidate -= 1
         if candidate == anchor + 1:
@@ -128,27 +135,53 @@ def _reconstruct(parents, node):
     return result
 
 
+GOAL_INFLATION = 0.35
+GOAL_RELIEF_RADIUS = 0.60
+
+
 def plan_route(start, goal, resolution=0.10, inflation=0.45,
-               dynamic_circles=()):
+               dynamic_circles=(), goal_inflation=GOAL_INFLATION,
+               goal_relief_radius=GOAL_RELIEF_RADIUS):
+    """Plan a route on the fixed field map.
+
+    Task zones are placed by lot and can sit closer to a drawn cylinder than
+    the cruise inflation allows, so the required clearance tapers from
+    ``inflation`` down to ``goal_inflation`` over the last
+    ``goal_relief_radius`` metres.  ``goal_inflation`` still keeps the whole
+    airframe outside the obstacle; only the extra cruise margin is given up,
+    and only where the rules force the aircraft to hover.
+    """
     start = (float(start[0]), float(start[1]))
     goal = (float(goal[0]), float(goal[1]))
     resolution = float(resolution)
     inflation = float(inflation)
+    goal_inflation = min(float(goal_inflation), inflation)
+    goal_relief_radius = max(0.0, float(goal_relief_radius))
+
+    def clearance_at(point):
+        if goal_relief_radius <= 0.0:
+            return inflation
+        distance = _heuristic(point, goal)
+        if distance >= goal_relief_radius:
+            return inflation
+        ratio = distance / goal_relief_radius
+        return goal_inflation + (inflation - goal_inflation) * ratio
+
     if not _inside_field(start, inflation):
         raise ValueError('start_outside_field')
-    if not _inside_field(goal, inflation):
+    if not _inside_field(goal, goal_inflation):
         raise ValueError('goal_outside_field')
     if not point_is_free(start, inflation):
         raise ValueError('start_blocked')
-    if not point_is_free(goal, inflation, dynamic_circles):
+    if not point_is_free(goal, goal_inflation, dynamic_circles):
         raise ValueError('goal_blocked')
     if resolution <= 0.0:
         raise ValueError('invalid_resolution')
 
-    minimum_x = FIELD_BOUNDS[0] + inflation
-    minimum_y = FIELD_BOUNDS[2] + inflation
-    maximum_x = FIELD_BOUNDS[1] - inflation
-    maximum_y = FIELD_BOUNDS[3] - inflation
+    minimum_x = FIELD_BOUNDS[0] + goal_inflation
+    minimum_y = FIELD_BOUNDS[2] + goal_inflation
+    maximum_x = FIELD_BOUNDS[1] - goal_inflation
+    maximum_y = FIELD_BOUNDS[3] - goal_inflation
     columns = int(round((maximum_x - minimum_x) / resolution))
     rows = int(round((maximum_y - minimum_y) / resolution))
 
@@ -161,8 +194,10 @@ def plan_route(start, goal, resolution=0.10, inflation=0.45,
                 round(minimum_y + node[1] * resolution, 6))
 
     def valid(node):
-        return (0 <= node[0] <= columns and 0 <= node[1] <= rows and
-                point_is_free(world(node), inflation, dynamic_circles))
+        if not (0 <= node[0] <= columns and 0 <= node[1] <= rows):
+            return False
+        point = world(node)
+        return point_is_free(point, clearance_at(point), dynamic_circles)
 
     def nearest_valid(node, exact_point):
         if valid(node):
@@ -204,7 +239,7 @@ def plan_route(start, goal, resolution=0.10, inflation=0.45,
             points = [world(node) for node in nodes]
             points[0] = start
             points[-1] = goal
-            return simplify_route(points, inflation, dynamic_circles)
+            return simplify_route(points, clearance_at, dynamic_circles)
         closed.add(current)
         for dx, dy in directions:
             neighbor = (current[0] + dx, current[1] + dy)
@@ -215,7 +250,9 @@ def plan_route(start, goal, resolution=0.10, inflation=0.45,
                         valid((current[0], current[1] + dy))):
                     continue
             step_cost = resolution * (math.sqrt(2.0) if dx and dy else 1.0)
-            if not point_is_free(world(neighbor), inflation + 0.12,
+            neighbor_point = world(neighbor)
+            if not point_is_free(neighbor_point,
+                                 clearance_at(neighbor_point) + 0.12,
                                  dynamic_circles):
                 step_cost += resolution * 2.0
             candidate_cost = current_cost + step_cost

@@ -1,6 +1,7 @@
 from __future__ import division, print_function
 
 import inspect
+import itertools
 import math
 import os
 import sys
@@ -46,6 +47,47 @@ class FieldMapTest(unittest.TestCase):
             self.assertEqual('goal_outside_field', str(error))
         else:
             self.fail('expected goal_outside_field')
+
+    def test_task_zone_next_to_a_drawn_cylinder_stays_reachable(self):
+        """Rescue zone 2 sits 0.602 m from cylinder 2 in placement 2.
+
+        Both placements are drawn by lot, so the pair is a legal draw and the
+        planner must still deliver the aircraft onto the zone instead of
+        rejecting the goal.
+        """
+        route = plan_route(
+            (0.00, 0.00), (2.70, -1.90),
+            dynamic_circles=((0.70, -1.45, 0.20), (2.10, -1.95, 0.20)))
+
+        self.assertEqual((2.70, -1.90), route[-1])
+
+    def test_every_drawn_field_layout_plans_the_full_mission(self):
+        from firefighting_mission.world_generator import (
+            CYLINDER_POSES, HAZARD_POSES, PERSON_POSES)
+
+        for first, second, hazard, person in itertools.product(
+                (1, 2), (1, 2), (1, 2), (1, 2, 3)):
+            circles = (CYLINDER_POSES[first][0] + (0.20,),
+                       CYLINDER_POSES[second][1] + (0.20,))
+            legs = [(0.0, 0.0), HAZARD_POSES[hazard],
+                    PERSON_POSES[person], (0.0, 0.0)]
+            for origin, destination in zip(legs, legs[1:]):
+                try:
+                    plan_route(origin, destination,
+                               dynamic_circles=circles)
+                except ValueError as error:
+                    self.fail('layout %s leg %s->%s rejected: %s' % (
+                        (first, second, hazard, person), origin,
+                        destination, error))
+
+    def test_goal_relief_never_cuts_inside_the_airframe_radius(self):
+        route = plan_route(
+            (0.00, 0.00), (2.70, -1.90),
+            dynamic_circles=((2.10, -1.95, 0.20),))
+
+        for point in route:
+            self.assertGreater(
+                math.hypot(point[0] - 2.10, point[1] + 1.95), 0.40, point)
 
     def test_start_inside_fixed_board_is_rejected(self):
         try:

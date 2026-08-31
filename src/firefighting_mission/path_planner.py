@@ -22,11 +22,13 @@ class VisualPlannerConfig(object):
                  observation_frames=3, side_hysteresis=0.15,
                  yaw_alignment_tolerance=0.10, lateral_trigger=0.55,
                  sensor_forward_offset=0.0,
+                 emergency_range=0.35,
                  known_static_tolerance=0.18,
                  global_replan_range=2.00, global_replan_frames=2,
                  global_replan_merge_distance=0.55,
                  dynamic_obstacle_radius=0.10,
                  dynamic_localization_margin=0.10,
+                 maximum_dynamic_obstacles=4,
                  geofence_warning_margin=0.35,
                  geofence_recovery_margin=0.55,
                  geofence_recovery_tolerance=0.05):
@@ -43,12 +45,14 @@ class VisualPlannerConfig(object):
         self.yaw_alignment_tolerance = float(yaw_alignment_tolerance)
         self.lateral_trigger = float(lateral_trigger)
         self.sensor_forward_offset = float(sensor_forward_offset)
+        self.emergency_range = float(emergency_range)
         self.known_static_tolerance = float(known_static_tolerance)
         self.global_replan_range = float(global_replan_range)
         self.global_replan_frames = int(global_replan_frames)
         self.global_replan_merge_distance = float(global_replan_merge_distance)
         self.dynamic_obstacle_radius = float(dynamic_obstacle_radius)
         self.dynamic_localization_margin = float(dynamic_localization_margin)
+        self.maximum_dynamic_obstacles = int(maximum_dynamic_obstacles)
         self.geofence_warning_margin = float(geofence_warning_margin)
         self.geofence_recovery_margin = float(geofence_recovery_margin)
         self.geofence_recovery_tolerance = float(
@@ -70,7 +74,7 @@ def map_target_to_local(target, map_pose, local_pose):
 
 
 def ramp_setpoint(last, desired, current, dt, horizontal_speed=0.30,
-                  maximum_lead=0.12, yaw_rate=0.60):
+                  maximum_lead=0.12, yaw_rate=0.60, lock_xy=False):
     if last is None:
         last = (current[0], current[1], desired[2], current[3])
     seconds = max(0.0, min(float(dt), 0.10))
@@ -79,8 +83,8 @@ def ramp_setpoint(last, desired, current, dt, horizontal_speed=0.30,
     delta_y = desired[1] - last[1]
     distance = math.hypot(delta_x, delta_y)
     scale = min(1.0, max_step / distance) if distance > 1e-9 else 1.0
-    x_value = last[0] + delta_x * scale
-    y_value = last[1] + delta_y * scale
+    x_value = desired[0] if lock_xy else last[0] + delta_x * scale
+    y_value = desired[1] if lock_xy else last[1] + delta_y * scale
     lead_x = x_value - current[0]
     lead_y = y_value - current[1]
     lead = math.hypot(lead_x, lead_y)
@@ -181,8 +185,8 @@ class VisualPathPlanner(object):
 
     def set_goal(self, goal, pose):
         self.goal = (float(goal[0]), float(goal[1]), self.config.altitude)
-        self.route = tuple(self.route_provider(
-            (float(pose[0]), float(pose[1])), self.goal[:2]))
+        start = (float(pose[0]), float(pose[1]))
+        self.route = tuple(self._plan_with_memory(start))
         self.waypoint_index = 1 if len(self.route) > 1 else 0
         self.state = 'FOLLOW_ROUTE'
         self.selected_side = ''
@@ -192,6 +196,21 @@ class VisualPathPlanner(object):
         self.hold_yaw = None
         self.hold_reason = ''
         self._reset_global_candidate()
+
+    def _plan_with_memory(self, start):
+        """Plan to the active goal around every cylinder learned so far.
+
+        Dropping the memory here would leave the new leg following a route
+        that ignores a known cylinder, which is exactly the case the
+        suppressed local stop assumes cannot happen.
+        """
+        if self.dynamic_route_provider is None or not self.temporary_obstacles:
+            return self.route_provider(start, self.goal[:2])
+        try:
+            return self.dynamic_route_provider(
+                start, self.goal[:2], self.temporary_obstacles)
+        except ValueError:
+            return self.route_provider(start, self.goal[:2])
 
     @staticmethod
     def _horizontal_distance(first, second):
@@ -210,13 +229,10 @@ class VisualPathPlanner(object):
                 self.temporary_obstacles = tuple(circles)
                 return
         circles.append(tuple(float(value) for value in circle))
+        limit = self.config.maximum_dynamic_obstacles
+        if limit > 0:
+            circles = circles[-limit:]
         self.temporary_obstacles = tuple(circles)
-
-    def _obstacle_circle(self, pose, obstacle):
-        center = _body_to_world(pose, obstacle.forward_m, obstacle.left_m)
-        radius = max(0.10,
-                     abs(obstacle.left_edge_m - obstacle.right_edge_m) / 2.0)
-        return (center[0], center[1], radius)
 
     def _dynamic_obstacle_circle(self, pose, obstacle):
         surface_range = math.hypot(obstacle.forward_m, obstacle.left_m)
@@ -258,6 +274,20 @@ class VisualPathPlanner(object):
             if separation <= self.config.global_replan_merge_distance:
                 return True
         return False
+
+    def _local_brake_required(self, pose, obstacle):
+        """Return whether a close obstacle still needs the local stop cycle.
+
+        A cylinder that already produced a dynamic replan is part of the
+        active route geometry, so braking for it again only repeats the
+        brake/observe/select cycle that was already paid for.  Anything
+        closer than ``emergency_range`` still stops, because at that range
+        localisation error alone can put the aircraft on the obstacle.
+        """
+        if obstacle.nearest_range_m < self.config.emergency_range:
+            return True
+        return not self._matches_remembered_obstacle(
+            self._dynamic_obstacle_circle(pose, obstacle))
 
     def _maybe_replan_for_far_obstacle(self, pose, obstacle):
         if (self.dynamic_route_provider is None or obstacle is None or
@@ -468,7 +498,7 @@ class VisualPathPlanner(object):
         self.selected_side = side
         self.last_selected_side = side
         self._remember_obstacle(
-            self._obstacle_circle(pose, self.active_obstacle))
+            self._dynamic_obstacle_circle(pose, self.active_obstacle))
         selected = left_candidate if side == 'LEFT' else right_candidate
         self.side_target, self.pass_target, self.rejoin_target = selected
         self.state = 'SIDESTEP'
@@ -513,7 +543,8 @@ class VisualPathPlanner(object):
                 self._clear_hold()
                 return route_command
             if (nearest is not None and
-                    nearest.nearest_range_m < self.config.trigger_range):
+                    nearest.nearest_range_m < self.config.trigger_range and
+                    self._local_brake_required(pose, nearest)):
                 self._reset_global_candidate()
                 self.active_obstacle = nearest
                 self.state = 'BRAKE'
@@ -526,8 +557,9 @@ class VisualPathPlanner(object):
                 return dynamic_command
             if abs(angle_difference(pose[3], route_command.target_yaw)) > \
                     self.config.yaw_alignment_tolerance:
+                self._clear_hold()
                 return self._command(
-                    'FOLLOW_ROUTE', self._lock_hold(pose),
+                    'FOLLOW_ROUTE', route_command.target,
                     route_command.target_yaw,
                     'aligning_route_yaw')
             self._clear_hold()

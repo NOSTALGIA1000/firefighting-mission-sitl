@@ -25,7 +25,14 @@ def quaternion_yaw(orientation):
 class PathPlannerNode(object):
     def __init__(self):
         self.planner = VisualPathPlanner(VisualPlannerConfig(
-            altitude=rospy.get_param('~transit_altitude', 1.20),
+            altitude=rospy.get_param('~transit_altitude', 1.25),
+            altitude_tolerance=rospy.get_param('~altitude_tolerance', 0.15),
+            yaw_alignment_tolerance=rospy.get_param(
+                '~yaw_alignment_tolerance', 0.20),
+            geofence_warning_margin=rospy.get_param(
+                '~geofence_warning_margin', 0.45),
+            geofence_recovery_margin=rospy.get_param(
+                '~geofence_recovery_margin', 0.65),
             minimum_corridor=rospy.get_param('~minimum_corridor', 0.90),
             trigger_range=rospy.get_param('~trigger_range', 0.85),
             sensor_forward_offset=rospy.get_param(
@@ -104,15 +111,18 @@ class PathPlannerNode(object):
               max(0.0, now - self.last_output_time))
         desired = (command.target[0], command.target[1], command.target[2],
                    command.target_yaw)
-        locked_xy = (command.state in (
-            'BRAKE', 'OBSERVE', 'SELECT_SIDE', 'HOLD_UNSAFE', 'REACHED') or
-            command.reason == 'aligning_route_yaw')
+        turning = command.reason == 'aligning_route_yaw'
+        locked_xy = command.state in (
+            'BRAKE', 'OBSERVE', 'SELECT_SIDE', 'HOLD_UNSAFE', 'REACHED')
+        cruise_speed = rospy.get_param('~maximum_horizontal_speed', 0.18)
+        turning_speed = rospy.get_param('~maximum_turning_speed', 0.12)
         self.output_setpoint = ramp_setpoint(
             self.output_setpoint, desired, planning_pose, dt,
-            horizontal_speed=rospy.get_param('~maximum_horizontal_speed', 0.20),
+            horizontal_speed=(turning_speed if turning else cruise_speed),
             maximum_lead=(None if locked_xy else rospy.get_param(
-                '~maximum_setpoint_lead', 0.08)),
-            yaw_rate=rospy.get_param('~maximum_yaw_rate', 0.15))
+                '~maximum_setpoint_lead', 0.25)),
+            yaw_rate=rospy.get_param('~maximum_yaw_rate', 0.35),
+            lock_xy=locked_xy)
         self.last_output_time = now
         target = PoseStamped()
         target.header.stamp = rospy.Time.now()

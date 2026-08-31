@@ -71,6 +71,17 @@ class VisualPathPlannerTest(unittest.TestCase):
         self.assertAlmostEqual(1.20, converted[2], places=6)
         self.assertAlmostEqual(-1.10, converted[3], places=6)
 
+    def test_map_target_xy_stays_on_fixed_world_axes_during_yaw(self):
+        target = (1.0, 0.0, 1.2, 0.0)
+        map_pose = (0.0, 0.0, 1.2, 0.0)
+        local_pose = (10.0, 20.0, 1.2, math.pi / 2.0)
+
+        converted = map_target_to_local(target, map_pose, local_pose)
+
+        self.assertAlmostEqual(11.0, converted[0], places=6)
+        self.assertAlmostEqual(20.0, converted[1], places=6)
+        self.assertAlmostEqual(math.pi / 2.0, converted[3], places=6)
+
     def test_follow_route_never_commands_23_metres(self):
         planner = planner_with_goal()
 
@@ -184,6 +195,12 @@ class VisualPathPlannerTest(unittest.TestCase):
         self.assertAlmostEqual(-0.20, command.target[1], places=6)
 
     def test_selected_cluster_is_remembered_as_world_circle(self):
+        """Local selection must remember the same circle model as replanning.
+
+        The cluster reports the near surface of a 200 mm cylinder, so the
+        centre lies one cylinder radius further along the sight line and the
+        stored radius carries the localisation margin.
+        """
         planner = planner_with_goal()
         planner.clearance_override = (1.30, 1.00)
         drive_to_select(planner)
@@ -192,9 +209,9 @@ class VisualPathPlannerTest(unittest.TestCase):
 
         self.assertEqual(1, len(planner.temporary_obstacles))
         circle = planner.temporary_obstacles[0]
-        self.assertAlmostEqual(0.80, circle[0], places=6)
+        self.assertAlmostEqual(0.90, circle[0], places=6)
         self.assertAlmostEqual(0.00, circle[1], places=6)
-        self.assertAlmostEqual(0.10, circle[2], places=6)
+        self.assertAlmostEqual(0.20, circle[2], places=6)
 
     def test_duplicate_visual_observations_merge(self):
         planner = planner_with_goal()
@@ -212,6 +229,24 @@ class VisualPathPlannerTest(unittest.TestCase):
         planner._remember_obstacle((1.15, -1.45, 0.20))
 
         self.assertEqual(1, len(planner.temporary_obstacles))
+
+    def test_dynamic_memory_is_capped_so_noise_cannot_seal_the_field(self):
+        """The rules place exactly two random cylinders.
+
+        Every extra remembered circle is a false positive that shrinks the
+        free space until A* reports ``route_unreachable``, so the memory keeps
+        only the most recent few observations.
+        """
+        planner = planner_with_goal()
+
+        for index in range(12):
+            planner._remember_obstacle((0.20 * index, -1.45 + 0.9 * index,
+                                        0.20))
+
+        self.assertLessEqual(len(planner.temporary_obstacles), 4)
+        newest = planner.temporary_obstacles[-1]
+        self.assertAlmostEqual(2.20, newest[0], places=6)
+        self.assertAlmostEqual(8.45, newest[1], places=6)
 
     def test_cylinders_nine_tenths_apart_remain_distinct(self):
         planner = planner_with_goal()
@@ -298,6 +333,90 @@ class VisualPathPlannerTest(unittest.TestCase):
 
         self.assertEqual(1, len(calls))
         self.assertEqual(1, len(planner.temporary_obstacles))
+
+    def test_remembered_replanned_cylinder_does_not_trigger_local_stop(self):
+        calls = []
+        far_obstacle = OBSTACLE._replace(
+            forward_m=1.40, nearest_range_m=1.35)
+        near_obstacle = OBSTACLE._replace(
+            forward_m=0.40, nearest_range_m=0.35)
+
+        def dynamic_route(start, goal, circles):
+            calls.append((tuple(start), tuple(goal), tuple(circles)))
+            return (tuple(start), (0.50, 0.50), tuple(goal))
+
+        planner = planner_with_goal(dynamic_route_provider=dynamic_route)
+        planner.update(POSE, (far_obstacle,), True, 1.0)
+        planner.update(POSE, (far_obstacle,), True, 1.1)
+
+        command = planner.update(
+            (1.0, 0.0, 1.2, 0.0), (near_obstacle,), True, 1.2)
+
+        self.assertEqual('FOLLOW_ROUTE', command.state)
+        self.assertNotEqual('obstacle_detected', command.reason)
+        self.assertEqual(1, len(calls))
+
+    def test_next_mission_leg_is_planned_around_remembered_cylinders(self):
+        """Learned cylinders must survive the switch to the next task zone.
+
+        Suppressing the repeated local stop is only safe while the active
+        route already accounts for every remembered cylinder, so a new goal
+        has to be planned with that memory instead of the bare fixed map.
+        """
+        calls = []
+
+        def dynamic_route(start, goal, circles):
+            calls.append(tuple(circles))
+            return (tuple(start), (0.50, 0.50), tuple(goal))
+
+        planner = planner_with_goal(dynamic_route_provider=dynamic_route)
+        planner._remember_obstacle((1.50, 0.00, 0.20))
+
+        planner.set_goal((2.0, -1.0, 1.2), POSE)
+
+        self.assertEqual([((1.50, 0.00, 0.20),)], calls)
+
+    def test_first_goal_without_memory_uses_the_fixed_map_route(self):
+        calls = []
+
+        def dynamic_route(start, goal, circles):
+            calls.append(tuple(circles))
+            return (tuple(start), tuple(goal))
+
+        planner = planner_with_goal(dynamic_route_provider=dynamic_route)
+
+        self.assertEqual([], calls)
+
+    def test_remembered_cylinder_still_brakes_inside_emergency_range(self):
+        far_obstacle = OBSTACLE._replace(
+            forward_m=1.40, nearest_range_m=1.35)
+        emergency_obstacle = OBSTACLE._replace(
+            forward_m=0.30, nearest_range_m=0.25)
+
+        def dynamic_route(start, goal, circles):
+            return (tuple(start), (0.50, 0.50), tuple(goal))
+
+        planner = planner_with_goal(dynamic_route_provider=dynamic_route)
+        planner.update(POSE, (far_obstacle,), True, 1.0)
+        planner.update(POSE, (far_obstacle,), True, 1.1)
+
+        command = planner.update(
+            (1.20, 0.0, 1.2, 0.0), (emergency_obstacle,), True, 1.2)
+
+        self.assertEqual('BRAKE', command.state)
+
+    def test_unremembered_cylinder_still_brakes_at_trigger_range(self):
+        planner = planner_with_goal()
+
+        command = planner.update(POSE, (OBSTACLE,), True, 1.0)
+
+        self.assertEqual('BRAKE', command.state)
+
+    def test_default_emergency_range_is_inside_trigger_range(self):
+        config = VisualPlannerConfig()
+
+        self.assertAlmostEqual(0.35, config.emergency_range, places=6)
+        self.assertLess(config.emergency_range, config.trigger_range)
 
     def test_one_metre_camera_detection_replans_before_close_range_brake(self):
         calls = []
@@ -596,7 +715,7 @@ class VisualPathPlannerTest(unittest.TestCase):
 
         self.assertEqual('REACHED', command.state)
 
-    def test_visual_avoidance_waits_until_camera_faces_route(self):
+    def test_visual_avoidance_turns_while_creeping_toward_route(self):
         def turning_route(start, goal):
             return (tuple(start), (0.0, -0.5), tuple(goal))
         planner = VisualPathPlanner(route_provider=turning_route)
@@ -605,14 +724,14 @@ class VisualPathPlannerTest(unittest.TestCase):
         command = planner.update(POSE, (OBSTACLE,), True, 3.0)
 
         self.assertEqual('FOLLOW_ROUTE', command.state)
-        self.assertEqual(POSE[:3], command.target)
+        self.assertEqual((0.0, -0.5, 1.2), command.target)
         self.assertAlmostEqual(-1.5708, command.target_yaw, places=3)
 
     def test_default_yaw_alignment_waits_for_rotation_to_settle(self):
         self.assertAlmostEqual(
             0.10, VisualPlannerConfig().yaw_alignment_tolerance, places=6)
 
-    def test_route_yaw_alignment_latches_first_xy(self):
+    def test_route_yaw_alignment_keeps_advancing_to_waypoint(self):
         def turning_route(start, goal):
             return (tuple(start), (0.0, -0.5), tuple(goal))
         planner = VisualPathPlanner(route_provider=turning_route)
@@ -621,7 +740,7 @@ class VisualPathPlannerTest(unittest.TestCase):
 
         command = planner.update((0.2, -0.3, 1.2, -0.1), (), True, 3.1)
 
-        self.assertEqual(POSE[:3], command.target)
+        self.assertEqual((0.0, -0.5, 1.2), command.target)
 
     def test_follow_route_skips_waypoint_passed_without_entering_radius(self):
         def staged_route(start, goal):
@@ -644,6 +763,7 @@ class VisualPathPlannerTest(unittest.TestCase):
         command = planner.update((0.10, -0.90, 1.2, 0.0), (), True, 3.0)
 
         self.assertEqual('aligning_route_yaw', command.reason)
+        self.assertEqual((0.0, -1.0, 1.2), command.target)
         self.assertAlmostEqual(-math.pi / 2.0,
                                command.target_yaw, places=6)
 
@@ -690,9 +810,19 @@ class VisualPathPlannerTest(unittest.TestCase):
             last=(0.0, 0.0, 1.2, 0.0),
             desired=(0.0, 0.0, 1.2, -1.0),
             current=(0.3, -0.4, 1.2, -0.1), dt=0.10,
-            maximum_lead=None)
+            maximum_lead=None, lock_xy=True)
 
         self.assertEqual((0.0, 0.0), output[:2])
+
+    def test_setpoint_ramp_snaps_to_new_latched_hold_before_turning(self):
+        output = ramp_setpoint(
+            last=(0.0, -1.40, 1.2, -1.57),
+            desired=(0.05, -1.58, 1.2, -0.90),
+            current=(0.05, -1.58, 1.2, -1.57), dt=0.10,
+            maximum_lead=None, lock_xy=True)
+
+        self.assertEqual((0.05, -1.58), output[:2])
+        self.assertAlmostEqual(-1.51, output[3], places=6)
 
     def test_setpoint_lead_limit_never_drags_route_toward_pose_drift(self):
         output = ramp_setpoint(
