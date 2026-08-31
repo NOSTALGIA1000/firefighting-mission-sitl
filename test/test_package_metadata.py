@@ -117,6 +117,9 @@ class PackageMetadataTest(unittest.TestCase):
         self.assertIn('EKF2_EV_NOISE_MD 1', px4_post)
         self.assertIn('EKF2_EVP_NOISE 0.03', px4_post)
         self.assertIn('EKF2_EVV_NOISE 0.03', px4_post)
+        # Widening this to 30 was tried and measured worse: with the
+        # estimate already diverging it feeds huge innovations straight into
+        # the filter. Both task legs flew at 10 and neither flew at 30.
         self.assertIn('EKF2_EVP_GATE 10', px4_post)
         self.assertIn('EKF2_EVV_GATE 10', px4_post)
         self.assertIn('EKF2_HGT_MODE 3', px4_post)

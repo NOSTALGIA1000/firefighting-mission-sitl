@@ -89,6 +89,35 @@ class FieldMapTest(unittest.TestCase):
             self.assertGreater(
                 math.hypot(point[0] - 2.10, point[1] + 1.95), 0.40, point)
 
+    def test_route_starts_from_a_hover_inside_the_cruise_inflation(self):
+        """The rules make the aircraft hover on a zone near a board.
+
+        Hazard zone 1 sits about 0.45 m from board 1, so a few centimetres of
+        hover drift used to put the aircraft inside its own planner's
+        inflated obstacle and plan_route refused to plan from where the
+        aircraft actually was.
+        """
+        self.assertFalse(point_is_free((1.20, -0.15), inflation=0.45))
+
+        route = plan_route((1.20, -0.15), (2.70, -1.90))
+
+        self.assertEqual((1.20, -0.15), route[0])
+        self.assertEqual((2.70, -1.90), route[-1])
+
+    def test_start_relief_still_keeps_the_airframe_out_of_the_board(self):
+        from firefighting_mission.field_map import START_INFLATION
+        self.assertGreater(START_INFLATION, 0.20)
+        self.assertLess(START_INFLATION, 0.45)
+
+    def test_route_away_from_start_and_goal_keeps_full_inflation(self):
+        route = plan_route((1.20, -0.15), (2.70, -1.90))
+
+        for point in route:
+            near_start = math.hypot(point[0] - 1.20, point[1] + 0.15) < 0.61
+            near_goal = math.hypot(point[0] - 2.70, point[1] + 1.90) < 0.61
+            if not near_start and not near_goal:
+                self.assertTrue(point_is_free(point, inflation=0.45), point)
+
     def test_start_inside_fixed_board_is_rejected(self):
         try:
             plan_route((0.70, -0.20), (2.70, -1.90))

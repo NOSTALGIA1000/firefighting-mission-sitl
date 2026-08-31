@@ -137,11 +137,15 @@ def _reconstruct(parents, node):
 
 GOAL_INFLATION = 0.35
 GOAL_RELIEF_RADIUS = 0.60
+START_INFLATION = 0.25
+START_RELIEF_RADIUS = 0.60
 
 
 def plan_route(start, goal, resolution=0.10, inflation=0.45,
                dynamic_circles=(), goal_inflation=GOAL_INFLATION,
-               goal_relief_radius=GOAL_RELIEF_RADIUS):
+               goal_relief_radius=GOAL_RELIEF_RADIUS,
+               start_inflation=START_INFLATION,
+               start_relief_radius=START_RELIEF_RADIUS):
     """Plan a route on the fixed field map.
 
     Task zones are placed by lot and can sit closer to a drawn cylinder than
@@ -150,6 +154,11 @@ def plan_route(start, goal, resolution=0.10, inflation=0.45,
     ``goal_relief_radius`` metres.  ``goal_inflation`` still keeps the whole
     airframe outside the obstacle; only the extra cruise margin is given up,
     and only where the rules force the aircraft to hover.
+
+    The start gets the same treatment for the same reason read backwards:
+    the aircraft is already at that point, so it cannot be inside a real
+    obstacle, and hover drift on a task zone would otherwise make the
+    planner refuse to plan from where the aircraft actually is.
     """
     start = (float(start[0]), float(start[1]))
     goal = (float(goal[0]), float(goal[1]))
@@ -157,31 +166,40 @@ def plan_route(start, goal, resolution=0.10, inflation=0.45,
     inflation = float(inflation)
     goal_inflation = min(float(goal_inflation), inflation)
     goal_relief_radius = max(0.0, float(goal_relief_radius))
+    start_inflation = min(float(start_inflation), inflation)
+    start_relief_radius = max(0.0, float(start_relief_radius))
+
+    def _tapered(point, anchor, relieved, radius):
+        if radius <= 0.0:
+            return inflation
+        distance = _heuristic(point, anchor)
+        if distance >= radius:
+            return inflation
+        return relieved + (inflation - relieved) * (distance / radius)
 
     def clearance_at(point):
-        if goal_relief_radius <= 0.0:
-            return inflation
-        distance = _heuristic(point, goal)
-        if distance >= goal_relief_radius:
-            return inflation
-        ratio = distance / goal_relief_radius
-        return goal_inflation + (inflation - goal_inflation) * ratio
+        return min(_tapered(point, goal, goal_inflation, goal_relief_radius),
+                   _tapered(point, start, start_inflation,
+                            start_relief_radius))
 
-    if not _inside_field(start, inflation):
+    if not _inside_field(start, start_inflation):
         raise ValueError('start_outside_field')
     if not _inside_field(goal, goal_inflation):
         raise ValueError('goal_outside_field')
-    if not point_is_free(start, inflation):
+    if not point_is_free(start, start_inflation):
         raise ValueError('start_blocked')
     if not point_is_free(goal, goal_inflation, dynamic_circles):
         raise ValueError('goal_blocked')
     if resolution <= 0.0:
         raise ValueError('invalid_resolution')
 
-    minimum_x = FIELD_BOUNDS[0] + goal_inflation
-    minimum_y = FIELD_BOUNDS[2] + goal_inflation
-    maximum_x = FIELD_BOUNDS[1] - goal_inflation
-    maximum_y = FIELD_BOUNDS[3] - goal_inflation
+    # The grid has to span whichever relief reaches closest to the fence,
+    # or a relieved start or goal falls outside the searchable area.
+    edge = min(goal_inflation, start_inflation)
+    minimum_x = FIELD_BOUNDS[0] + edge
+    minimum_y = FIELD_BOUNDS[2] + edge
+    maximum_x = FIELD_BOUNDS[1] - edge
+    maximum_y = FIELD_BOUNDS[3] - edge
     columns = int(round((maximum_x - minimum_x) / resolution))
     rows = int(round((maximum_y - minimum_y) / resolution))
 
