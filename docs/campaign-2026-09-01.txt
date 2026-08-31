@@ -1,0 +1,10 @@
+RESULT run=1 hazard=timeout closest=0.671 outcome=stuck_at_hazard reason=geofence_recovery gzserver_alive=2 blind_land=5 lockdown=0 no_offboard=0 ev_resets=9 ulog=/home/ss/.ros/log/2026-08-31/16_58_31.ulg
+RESULT run=2 hazard=timeout closest=0.655 outcome=stuck_at_hazard reason=invalid_pose gzserver_alive=2 blind_land=4 lockdown=0 no_offboard=2 ev_resets=5 ulog=/home/ss/.ros/log/2026-08-31/17_01_22.ulg
+RESULT run=3 hazard=41.7 rescue=28.7 home=45.1 total=115.5 closest=0.436 outcome=complete within_180=yes gzserver_alive=2 blind_land=0 lockdown=0 no_offboard=0 ev_resets=0 ulog=/home/ss/.ros/log/2026-08-31/17_04_09.ulg
+RESULT run=4 hazard=timeout closest=0.564 outcome=stuck_at_hazard reason=invalid_pose gzserver_alive=2 blind_land=5 lockdown=1 no_offboard=1 ev_resets=11 ulog=/home/ss/.ros/log/2026-08-31/17_07_22.ulg
+RESULT run=5 hazard=39.7 rescue=timeout closest=0.579 outcome=stuck_at_rescue reason=geofence_recovery gzserver_alive=2 blind_land=0 lockdown=0 no_offboard=0 ev_resets=0 ulog=/home/ss/.ros/log/2026-08-31/17_10_14.ulg
+RESULT run=6 hazard=41.5 rescue=22.1 home=90.4 total=154.0 closest=0.590 outcome=complete within_180=yes gzserver_alive=2 blind_land=0 lockdown=0 no_offboard=0 ev_resets=0 ulog=/home/ss/.ros/log/2026-08-31/17_13_53.ulg
+RESULT run=7 hazard=timeout closest=0.359 outcome=stuck_at_hazard reason=invalid_pose gzserver_alive=2 blind_land=2 lockdown=0 no_offboard=2 ev_resets=1 ulog=/home/ss/.ros/log/2026-08-31/17_17_43.ulg
+RESULT run=8 hazard=timeout closest=0.361 outcome=stuck_at_hazard reason=geofence_recovery gzserver_alive=2 blind_land=5 lockdown=0 no_offboard=0 ev_resets=11 ulog=/home/ss/.ros/log/2026-08-31/17_20_37.ulg
+RESULT run=9 hazard=45.7 rescue=22.5 home=timeout closest=0.578 outcome=stuck_at_home reason=invalid_pose gzserver_alive=2 blind_land=1 lockdown=0 no_offboard=2 ev_resets=1 ulog=/home/ss/.ros/log/2026-08-31/17_23_30.ulg
+RESULT run=10 outcome=driver_failed gzserver_alive=0 blind_land=1 lockdown=2 no_offboard=0 ev_resets=3 ulog=/home/ss/.ros/log/2026-08-31/17_27_41.ulg
