@@ -108,7 +108,14 @@ class PackageMetadataTest(unittest.TestCase):
         self.assertIn('MC_YAW_P 2.8', px4_post)
         self.assertIn('MC_YAWRATE_P 0.20', px4_post)
         self.assertIn('MC_YAWRATE_I 0.1', px4_post)
-        self.assertIn('EKF2_HDG_GATE 15', px4_post)
+        # The gate is in standard deviations, so tightening EKF2_EVA_NOISE
+        # to 0.01 also tightened this: 15 SD went from 0.75 rad to 0.15 rad.
+        # A route turn produced a 0.25 rad transient, the heading measurement
+        # was rejected (test ratio 3.0, then 19.8), yaw free-ran, and EV
+        # position was rejected in turn. SITL vision yaw is exact truth, so
+        # there are no outliers here to protect against; a real VIO feed
+        # would need this revisited.
+        self.assertIn('EKF2_HDG_GATE 60', px4_post)
         self.assertIn('EKF2_MAG_ACCLIM 5.0', px4_post)
         self.assertIn('EKF2_MAGBIAS_ID 0', px4_post)
         self.assertIn('EKF2_MAGBIAS_X 0', px4_post)

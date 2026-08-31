@@ -99,6 +99,22 @@ def ramp_setpoint(last, desired, current, dt, horizontal_speed=0.30,
     return (x_value, y_value, desired[2], yaw_value)
 
 
+def setpoint_stream_target(command_target, last_output):
+    """Return what to publish so OFFBOARD never loses its setpoint stream.
+
+    A planner hold on an invalid pose used to publish nothing at all, and
+    PX4 answered with "Failsafe enabled: no RC and no offboard" followed by
+    a blind descend.  Holding the last commanded setpoint keeps the stream
+    alive through a transient estimator glitch instead of turning it into a
+    guaranteed landing; the aircraft is already tracking that point.
+    """
+    if command_target is not None:
+        return command_target
+    if last_output is None:
+        return None
+    return (last_output[0], last_output[1], last_output[2])
+
+
 def _body_to_world(pose, forward, left):
     cosine = math.cos(pose[3])
     sine = math.sin(pose[3])

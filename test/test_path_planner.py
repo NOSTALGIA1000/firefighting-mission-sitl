@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, 'src'))
 
 from firefighting_mission.path_planner import (
     VisualPathPlanner, VisualPlannerConfig, corridor_clearances,
-    map_target_to_local, ramp_setpoint)
+    map_target_to_local, ramp_setpoint, setpoint_stream_target)
 from firefighting_mission.stereo_obstacles import ObstacleClusterData
 
 
@@ -81,6 +81,20 @@ class VisualPathPlannerTest(unittest.TestCase):
         self.assertAlmostEqual(11.0, converted[0], places=6)
         self.assertAlmostEqual(20.0, converted[1], places=6)
         self.assertAlmostEqual(math.pi / 2.0, converted[3], places=6)
+
+    def test_invalid_pose_keeps_publishing_the_last_setpoint(self):
+        """Dropping the stream costs OFFBOARD, which costs the aircraft."""
+        held = setpoint_stream_target(None, (1.20, -0.30, 1.25, -0.60))
+
+        self.assertEqual((1.20, -0.30, 1.25), held)
+
+    def test_a_real_target_is_published_unchanged(self):
+        target = (2.00, -1.00, 1.25)
+
+        self.assertIs(target, setpoint_stream_target(target, (0.0, 0.0, 1.25)))
+
+    def test_nothing_to_publish_before_the_first_setpoint(self):
+        self.assertIsNone(setpoint_stream_target(None, None))
 
     def test_follow_route_never_commands_23_metres(self):
         planner = planner_with_goal()

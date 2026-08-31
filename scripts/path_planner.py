@@ -10,7 +10,8 @@ from std_msgs.msg import String
 
 from firefighting_mission.msg import (AvoidanceStatus, ObstacleArray)
 from firefighting_mission.path_planner import (
-    VisualPathPlanner, VisualPlannerConfig, ramp_setpoint)
+    VisualPathPlanner, VisualPlannerConfig, ramp_setpoint,
+    setpoint_stream_target)
 from firefighting_mission.stereo_obstacles import ObstacleClusterData
 
 
@@ -172,8 +173,10 @@ class PathPlannerNode(object):
         command = self.planner.update(
             planning_pose, self.obstacles, self.perception_ready,
             now)
-        if command.target is not None:
-            self._publish_target(command, planning_pose, now)
+        target = setpoint_stream_target(command.target, self.output_setpoint)
+        if target is not None:
+            self._publish_target(command._replace(target=target),
+                                 planning_pose, now)
         self._publish_status(command)
 
 
