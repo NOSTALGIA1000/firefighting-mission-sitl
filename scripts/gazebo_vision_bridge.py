@@ -8,6 +8,7 @@ from gazebo_msgs.msg import ModelStates
 from nav_msgs.msg import Odometry
 
 from firefighting_mission.external_vision import (due_for_publish, model_state,
+                                                  sample_is_usable,
                                                   world_vector_to_body)
 
 
@@ -29,6 +30,11 @@ class GazeboVisionBridge(object):
     def _model_states(self, message):
         state = model_state(message, self.model_name)
         if state is None:
+            return
+        if not sample_is_usable(state[0], state[1]):
+            rospy.logwarn_throttle(
+                5.0, 'dropping non-finite Gazebo sample for %s',
+                self.model_name)
             return
         # Stamp and throttle here, so the timestamp belongs to this sample.
         # Republishing the latest sample from a timer instead offsets the

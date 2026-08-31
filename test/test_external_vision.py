@@ -6,6 +6,7 @@ from firefighting_mission.external_vision import (
     due_for_publish,
     model_pose,
     model_state,
+    sample_is_usable,
     world_vector_to_body,
 )
 
@@ -65,6 +66,34 @@ class ExternalVisionTest(unittest.TestCase):
         self.assertAlmostEqual(0.0, body[2])
 
 
+    def test_finite_sample_is_usable(self):
+        pose = FakePose(FakeVector(1.0, 2.0, 1.2), FakeQuaternion(0, 0, 0, 1))
+        twist = FakeTwist(FakeVector(0.1, 0.0, 0.0),
+                          FakeVector(0.0, 0.0, 0.05))
+
+        self.assertTrue(sample_is_usable(pose, twist))
+
+    def test_nan_velocity_sample_is_dropped(self):
+        """Unsettled Gazebo physics reports NaN, and EKF2 cannot use it."""
+        nan = float('nan')
+        pose = FakePose(FakeVector(1.0, 2.0, 1.2), FakeQuaternion(0, 0, 0, 1))
+        twist = FakeTwist(FakeVector(nan, nan, nan), FakeVector(0.0, 0.0, 0.0))
+
+        self.assertFalse(sample_is_usable(pose, twist))
+
+    def test_nan_position_sample_is_dropped(self):
+        nan = float('nan')
+        pose = FakePose(FakeVector(nan, 2.0, 1.2), FakeQuaternion(0, 0, 0, 1))
+        twist = FakeTwist(FakeVector(0.0, 0.0, 0.0), FakeVector(0.0, 0.0, 0.0))
+
+        self.assertFalse(sample_is_usable(pose, twist))
+
+    def test_degenerate_orientation_is_dropped(self):
+        pose = FakePose(FakeVector(1.0, 2.0, 1.2), FakeQuaternion(0, 0, 0, 0))
+        twist = FakeTwist(FakeVector(0.0, 0.0, 0.0), FakeVector(0.0, 0.0, 0.0))
+
+        self.assertFalse(sample_is_usable(pose, twist))
+
     def test_first_sample_is_always_due(self):
         self.assertTrue(due_for_publish(None, 12.0, 0.02))
     def test_sample_inside_the_period_is_skipped(self):
@@ -95,6 +124,22 @@ class FakeVector(object):
         self.x = x
         self.y = y
         self.z = z
+
+
+if __name__ == '__main__':
+    unittest.main()
+
+
+class FakePose(object):
+    def __init__(self, position, orientation):
+        self.position = position
+        self.orientation = orientation
+
+
+class FakeTwist(object):
+    def __init__(self, linear, angular):
+        self.linear = linear
+        self.angular = angular
 
 
 if __name__ == '__main__':
