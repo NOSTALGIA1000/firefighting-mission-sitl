@@ -3,6 +3,7 @@ from __future__ import print_function
 import unittest
 
 from firefighting_mission.external_vision import (
+    due_for_publish,
     model_pose,
     model_state,
     world_vector_to_body,
@@ -63,6 +64,23 @@ class ExternalVisionTest(unittest.TestCase):
         self.assertAlmostEqual(0.0, body[1])
         self.assertAlmostEqual(0.0, body[2])
 
+
+    def test_first_sample_is_always_due(self):
+        self.assertTrue(due_for_publish(None, 12.0, 0.02))
+    def test_sample_inside_the_period_is_skipped(self):
+        self.assertFalse(due_for_publish(12.000, 12.010, 0.02))
+    def test_sample_on_the_period_boundary_is_due(self):
+        self.assertTrue(due_for_publish(12.000, 12.020, 0.02))
+    def test_clock_jumping_backwards_forces_a_publish(self):
+        """Gazebo restarts reset sim time; the bridge must not stall."""
+        self.assertTrue(due_for_publish(90.0, 0.5, 0.02))
+    def test_non_positive_period_is_rejected(self):
+        try:
+            due_for_publish(None, 1.0, 0.0)
+        except ValueError as error:
+            self.assertEqual('period_must_be_positive', str(error))
+        else:
+            self.fail('expected period_must_be_positive')
 
 class FakeQuaternion(object):
     def __init__(self, x, y, z, w):

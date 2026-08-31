@@ -7,7 +7,8 @@ import rospy
 from gazebo_msgs.msg import ModelStates
 from nav_msgs.msg import Odometry
 
-from firefighting_mission.external_vision import model_state, world_vector_to_body
+from firefighting_mission.external_vision import (due_for_publish, model_state,
+                                                  world_vector_to_body)
 
 
 class GazeboVisionBridge(object):
@@ -19,23 +20,29 @@ class GazeboVisionBridge(object):
         if publish_rate <= 0.0:
             raise ValueError('~publish_rate must be positive')
 
-        self.latest_state = None
+        self.period = 1.0 / publish_rate
+        self.last_sample_time = None
         self.publisher = rospy.Publisher(output_topic, Odometry, queue_size=10)
         self.subscriber = rospy.Subscriber('/gazebo/model_states', ModelStates,
                                            self._model_states, queue_size=1)
-        self.timer = rospy.Timer(rospy.Duration(1.0 / publish_rate),
-                                 self._publish)
 
     def _model_states(self, message):
         state = model_state(message, self.model_name)
-        if state is not None:
-            self.latest_state = copy.deepcopy(state)
-
-    def _publish(self, _event):
-        if self.latest_state is None:
+        if state is None:
             return
-        pose, twist = self.latest_state
+        # Stamp and throttle here, so the timestamp belongs to this sample.
+        # Republishing the latest sample from a timer instead offsets the
+        # stamp by up to one period, and PX4 fuses external vision with
+        # EKF2_EV_DELAY at zero, so that offset becomes innovation.
         stamp = rospy.Time.now()
+        if not due_for_publish(self.last_sample_time, stamp.to_sec(),
+                               self.period):
+            return
+        self.last_sample_time = stamp.to_sec()
+        self._publish(state, stamp)
+
+    def _publish(self, state, stamp):
+        pose, twist = state
 
         message = Odometry()
         message.header.stamp = stamp

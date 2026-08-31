@@ -46,3 +46,26 @@ def world_vector_to_body(orientation, vector):
         + 2.0 * (y * z - x * w) * vy
         + (1.0 - 2.0 * (x * x + y * y)) * vz,
     )
+
+
+def due_for_publish(last_sample_time, sample_time, period):
+    """Return whether a sample taken at ``sample_time`` should be forwarded.
+
+    The bridge throttles inside the ``/gazebo/model_states`` callback rather
+    than on a separate timer, so the stamp it writes belongs to the sample it
+    sends.  A timer decouples the two by up to one period, and PX4 fuses
+    external vision with ``EKF2_EV_DELAY`` at zero, so that offset shows up
+    as innovation and makes EKF2 reset to vision.
+    """
+    period = float(period)
+    if period <= 0.0:
+        raise ValueError('period_must_be_positive')
+    if last_sample_time is None:
+        return True
+    elapsed = float(sample_time) - float(last_sample_time)
+    if elapsed < 0.0:
+        # Simulated time restarted; never stall waiting for the old clock.
+        return True
+    # Sim-time subtraction lands just under the period often enough that an
+    # exact compare drops every other sample and halves the feed rate.
+    return elapsed >= period - 1e-9
