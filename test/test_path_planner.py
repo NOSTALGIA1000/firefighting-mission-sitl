@@ -82,6 +82,39 @@ class VisualPathPlannerTest(unittest.TestCase):
         self.assertAlmostEqual(20.0, converted[1], places=6)
         self.assertAlmostEqual(math.pi / 2.0, converted[3], places=6)
 
+    def test_geofence_hold_releases_once_back_inside_the_field(self):
+        """Requiring 5 cm of a recovery point wedged the run.
+
+        The hazard zone sits 0.20 m from the geofence warning line, so a
+        small overshoot trips recovery, and the hold only released within
+        a fixed tolerance of a single point.
+        """
+        planner = VisualPathPlanner(
+            VisualPlannerConfig(known_static_tolerance=-1.0),
+            route_provider=straight_route,
+            path_validator=lambda start, side, passing, rejoin: True)
+        planner.set_goal((1.25, -0.10, 1.2), (0.0, -1.0, 1.2, 0.0))
+
+        outside = planner.update((1.25, 0.40, 1.2, 0.0), (), True, 1.0)
+        recovered = planner.update((1.25, -0.30, 1.2, 0.0), (), True, 1.1)
+
+        self.assertEqual('HOLD_UNSAFE', outside.state)
+        self.assertEqual('geofence_recovery', outside.reason)
+        self.assertNotEqual('HOLD_UNSAFE', recovered.state)
+
+    def test_geofence_hold_persists_while_still_outside(self):
+        planner = VisualPathPlanner(
+            VisualPlannerConfig(known_static_tolerance=-1.0),
+            route_provider=straight_route,
+            path_validator=lambda start, side, passing, rejoin: True)
+        planner.set_goal((1.25, -0.10, 1.2), (0.0, -1.0, 1.2, 0.0))
+
+        planner.update((1.25, 0.40, 1.2, 0.0), (), True, 1.0)
+        still_out = planner.update((1.25, 0.25, 1.2, 0.0), (), True, 1.1)
+
+        self.assertEqual('HOLD_UNSAFE', still_out.state)
+        self.assertEqual('geofence_recovery', still_out.reason)
+
     def test_invalid_pose_keeps_publishing_the_last_setpoint(self):
         """Dropping the stream costs OFFBOARD, which costs the aircraft."""
         held = setpoint_stream_target(None, (1.20, -0.30, 1.25, -0.60))

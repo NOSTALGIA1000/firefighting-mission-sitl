@@ -31,8 +31,7 @@ class VisualPlannerConfig(object):
                  maximum_dynamic_obstacles=4,
                  blocked_route_retry_limit=40,
                  geofence_warning_margin=0.35,
-                 geofence_recovery_margin=0.55,
-                 geofence_recovery_tolerance=0.05):
+                 geofence_recovery_margin=0.55):
         self.altitude = float(altitude)
         self.altitude_tolerance = float(altitude_tolerance)
         self.trigger_range = float(trigger_range)
@@ -57,8 +56,6 @@ class VisualPlannerConfig(object):
         self.blocked_route_retry_limit = int(blocked_route_retry_limit)
         self.geofence_warning_margin = float(geofence_warning_margin)
         self.geofence_recovery_margin = float(geofence_recovery_margin)
-        self.geofence_recovery_tolerance = float(
-            geofence_recovery_tolerance)
 
 
 def angle_difference(first, second):
@@ -426,6 +423,21 @@ class VisualPathPlanner(object):
                 max(FIELD_BOUNDS[2] + recovery,
                     min(FIELD_BOUNDS[3] - recovery, pose[1])))
 
+    def _inside_recovery_box(self, pose):
+        """Return whether the aircraft is back inside the deeper safe box.
+
+        Releasing on the recovery margin rather than on proximity to a single
+        point gives the hysteresis the two margins were meant to provide, and
+        cannot wedge: the old release needed the aircraft within
+        a fixed tolerance of one point, and any steady-state offset
+        held the run there for good.
+        """
+        recovery = self.config.geofence_recovery_margin
+        return (FIELD_BOUNDS[0] + recovery <= pose[0] <=
+                FIELD_BOUNDS[1] - recovery and
+                FIELD_BOUNDS[2] + recovery <= pose[1] <=
+                FIELD_BOUNDS[3] - recovery)
+
     def _geofence_hold(self, pose, target):
         if self.interrupted_state is None and self.state != 'HOLD_UNSAFE':
             self.interrupted_state = self.state
@@ -591,10 +603,10 @@ class VisualPathPlanner(object):
         if not perception_ready:
             return self._hold(pose, 'perception_not_ready')
         if (self.hold_reason == 'geofence_recovery' and
-                self.hold_target is not None and
-                self._horizontal_distance(pose, self.hold_target) >
-                self.config.geofence_recovery_tolerance):
-            return self._geofence_hold(pose, self.hold_target)
+                self.hold_target is not None):
+            if not self._inside_recovery_box(pose):
+                return self._geofence_hold(pose, self.hold_target)
+            self._clear_hold()
         geofence_target = self._geofence_recovery_target(pose)
         if geofence_target is not None:
             return self._geofence_hold(pose, geofence_target)
