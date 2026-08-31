@@ -93,6 +93,16 @@ class PackageMetadataTest(unittest.TestCase):
         self.assertIn('cmp -s', start_sitl)
         self.assertIn('EKF2_AID_MASK 280', px4_post)
         self.assertIn('EKF2_MAG_TYPE 5', px4_post)
+        self.assertIn('EKF2_TAU_POS 0.10', px4_post)
+        self.assertIn('MC_YAWRATE_MAX 45', px4_post)
+        # Detuned yaw gains cannot track the route yaw setpoint: at
+        # MC_YAW_P 0.3 a 0.35 rad/s slew leaves ~1.17 rad of standing heading
+        # error, which ended every VM run in "Critical navigation failure"
+        # followed by AUTO.LAND.  These are the PX4 v1.11 defaults.
+        self.assertIn('MC_YAW_P 2.8', px4_post)
+        self.assertIn('MC_YAWRATE_P 0.20', px4_post)
+        self.assertIn('MC_YAWRATE_I 0.1', px4_post)
+        self.assertIn('EKF2_HDG_GATE 15', px4_post)
         self.assertIn('EKF2_MAG_ACCLIM 5.0', px4_post)
         self.assertIn('EKF2_MAGBIAS_ID 0', px4_post)
         self.assertIn('EKF2_MAGBIAS_X 0', px4_post)
@@ -110,6 +120,7 @@ class PackageMetadataTest(unittest.TestCase):
         self.assertIn('/mavros/odometry/out', bridge)
         self.assertIn("get_param('~publish_rate', 50.0)", bridge)
         self.assertIn('nav_msgs.msg import Odometry', bridge)
+        self.assertIn('message.twist.covariance[index] = 0.01', bridge)
         self.assertIn("message.header.frame_id = 'odom'", bridge)
         self.assertIn("message.child_frame_id = 'base_link'", bridge)
         self.assertNotIn('/mavros/vision_pose/pose', bridge)

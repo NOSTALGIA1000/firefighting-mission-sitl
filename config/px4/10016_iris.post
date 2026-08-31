@@ -9,6 +9,12 @@ param set EKF2_MAGBIAS_Z 0
 param set EKF2_AID_MASK 280
 param set EKF2_MAG_TYPE 5
 param set EKF2_MAG_ACCLIM 5.0
+param set EKF2_TAU_POS 0.10
+param set MC_YAWRATE_MAX 45
+param set MC_YAW_P 2.8
+param set MC_YAWRATE_P 0.20
+param set MC_YAWRATE_I 0.1
+param set EKF2_HDG_GATE 15
 param set EKF2_HGT_MODE 3
 param set EKF2_EV_DELAY 0
 param set EKF2_EV_NOISE_MD 1

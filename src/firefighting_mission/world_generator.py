@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import os
 import random
 from collections import namedtuple
 
@@ -191,6 +192,9 @@ def render_world(scenario):
 def generate_world(seed, output_path):
     scenario = build_scenario(seed)
     rendered = render_world(scenario)
+    directory = os.path.dirname(output_path)
+    if directory and not os.path.isdir(directory):
+        os.makedirs(directory)
     with open(output_path, 'wb') as handle:
         handle.write(rendered.encode('utf-8'))
     return scenario

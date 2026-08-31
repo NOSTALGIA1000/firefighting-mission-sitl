@@ -66,6 +66,28 @@ class StereoModelTest(unittest.TestCase):
         self.assertIsNotNone(gps)
         self.assertEqual('0', gps.find('gpsNoise').text)
 
+    def test_px4_rotor_and_imu_joint_axes_use_parent_model_frame(self):
+        """Joint axes must stay in the parent model frame, as PX4 ships them.
+
+        Setting these to 0 makes Gazebo 9 report every ``iris_0`` link at
+        exactly (0,0,0) with NaN velocity while static models in the same
+        world stay clean.  PX4 then receives no IMU at all, EKF2 resets to
+        external vision every 40 ms, ``/mavros/local_position`` publishes a
+        NaN altitude and the aircraft never arms.  Observed on the VM on
+        2026-08-31; restoring 1 restored normal flight immediately.
+        """
+        root = ET.parse(os.path.join(
+            PROJECT_ROOT, 'models', 'fire_iris', 'fire_iris.sdf')).getroot()
+        joint_names = ('/imu_joint', 'rotor_0_joint', 'rotor_1_joint',
+                       'rotor_2_joint', 'rotor_3_joint')
+
+        for name in joint_names:
+            joint = root.find(".//joint[@name='%s']" % name)
+            self.assertIsNotNone(joint)
+            self.assertEqual(
+                '1', joint.find('axis/use_parent_model_frame').text,
+                name)
+
     def test_sitl_loader_exposes_gazebo_depth_plugin_dependencies(self):
         with open(os.path.join(PROJECT_ROOT, 'scripts', 'start_sitl.sh'),
                   'r') as handle:
