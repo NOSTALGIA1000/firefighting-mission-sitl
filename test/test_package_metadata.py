@@ -94,6 +94,12 @@ class PackageMetadataTest(unittest.TestCase):
         self.assertIn('EKF2_AID_MASK 280', px4_post)
         self.assertIn('EKF2_MAG_TYPE 5', px4_post)
         self.assertIn('EKF2_TAU_POS 0.10', px4_post)
+        # Left unset, EKF2_EVA_NOISE defaults to 0.05 rad. With a converged
+        # yaw variance near 1e-4 that is a Kalman gain of about 4 percent per
+        # update, so a 0.35 rad/s turn built up 0.3 rad of heading error, the
+        # position innovation blew past EKF2_EVP_GATE, EV position was
+        # rejected and the estimate ran 44 m away from truth.
+        self.assertIn('EKF2_EVA_NOISE 0.01', px4_post)
         self.assertIn('MC_YAWRATE_MAX 45', px4_post)
         # Detuned yaw gains cannot track the route yaw setpoint: at
         # MC_YAW_P 0.3 a 0.35 rad/s slew leaves ~1.17 rad of standing heading
