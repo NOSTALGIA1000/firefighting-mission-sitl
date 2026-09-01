@@ -8,6 +8,17 @@ clean_px4_locks() {
   rm -f /tmp/px4_lock-* /tmp/px4-sock-* 2>/dev/null
 }
 
+# start_sitl.sh refuses to replace an installed post-start file that differs
+# from the one it wants, which is right during a session but wrong across
+# them: switching FIRE_ESTIMATOR, or editing the config, then costs a whole
+# run to "Refusing to overwrite different PX4 iris post-start file" and a
+# dead required node. Teardown is the explicit "reset the rig" step, so it
+# drops the installed copy and lets the next launch install the right one.
+clean_installed_px4_config() {
+  px4_root="${PX4_FIRMWARE_DIR:-/home/ss/PX4_Firmware}"
+  rm -f "$px4_root/ROMFS/px4fmu_common/init.d-posix/10016_iris.post" 2>/dev/null
+}
+
 # roslaunch scans ~/.ros/log on every start, and a campaign leaves a session
 # directory per run.  Once that reaches a couple of gigabytes gzserver starts
 # aborting at launch (exit 134) before Gazebo ever comes up, which shows up
@@ -25,6 +36,7 @@ for attempt in 1 2 3 4 5 6; do
   remaining=$(pgrep -f "$PATTERN" | grep -v "^$$\$" | wc -l)
   if [ "$remaining" -eq 0 ]; then
     clean_px4_locks
+    clean_installed_px4_config
     trim_ros_logs
     echo "clean after $((attempt-1)) rounds"
     exit 0
@@ -37,6 +49,7 @@ for attempt in 1 2 3 4 5 6; do
   sleep 4
 done
 clean_px4_locks
+clean_installed_px4_config
 echo "STILL RUNNING:"
 pgrep -a -f "$PATTERN" | cut -c1-70
 exit 1
