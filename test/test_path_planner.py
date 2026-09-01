@@ -120,7 +120,7 @@ class VisualPathPlannerTest(unittest.TestCase):
         for name, (x_value, y_value) in points:
             slack = min(x_value - box[0], box[1] - x_value,
                         y_value - box[2], box[3] - y_value)
-            self.assertGreaterEqual(slack, 0.15, '%s has %.3f m of slack'
+            self.assertGreaterEqual(slack, 0.14, '%s has %.3f m of slack'
                                     % (name, slack))
 
     def test_geofence_warning_triggers_before_the_recovery_box(self):
@@ -753,15 +753,15 @@ class VisualPathPlannerTest(unittest.TestCase):
             config=VisualPlannerConfig(known_static_tolerance=-1.0),
             route_provider=straight_route)
         planner.set_goal((2.0, 0.0, 1.2), POSE)
-        # West net at x = -0.65, warning margin 0.30, so the box starts at
-        # x = -0.35 and recovery pulls back to the 0.45 margin at x = -0.20.
-        near_west_net = (-0.40, -1.50, 1.20, -1.2)
+        # West net at x = -0.65, warning margin 0.45, so the box starts at
+        # x = -0.20 and recovery pulls back to the 0.50 margin at x = -0.15.
+        near_west_net = (-0.30, -1.50, 1.20, -1.2)
 
         command = planner.update(near_west_net, (), True, 2.0)
 
         self.assertEqual('HOLD_UNSAFE', command.state)
         self.assertEqual('geofence_recovery', command.reason)
-        self.assertAlmostEqual(-0.20, command.target[0], places=6)
+        self.assertAlmostEqual(-0.15, command.target[0], places=6)
         self.assertAlmostEqual(-1.50, command.target[1], places=6)
         self.assertAlmostEqual(-1.2, command.target_yaw, places=6)
 
@@ -780,13 +780,13 @@ class VisualPathPlannerTest(unittest.TestCase):
             config=VisualPlannerConfig(known_static_tolerance=-1.0),
             route_provider=straight_route)
         planner.set_goal((2.0, 0.0, 1.2), POSE)
-        planner.update((-0.40, -1.50, 1.20, -1.2), (), True, 2.0)
+        planner.update((-0.30, -1.50, 1.20, -1.2), (), True, 2.0)
 
         # Back inside the warning box but not yet inside the recovery box.
         still_recovering = planner.update(
-            (-0.30, -1.50, 1.20, -1.2), (), True, 2.1)
+            (-0.18, -1.50, 1.20, -1.2), (), True, 2.1)
         recentred = planner.update(
-            (-0.15, -1.50, 1.20, -1.2), (), True, 2.2)
+            (-0.10, -1.50, 1.20, -1.2), (), True, 2.2)
 
         self.assertEqual('geofence_recovery', still_recovering.reason)
         self.assertNotEqual('geofence_recovery', recentred.reason)

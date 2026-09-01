@@ -30,8 +30,8 @@ class VisualPlannerConfig(object):
                  dynamic_localization_margin=0.10,
                  maximum_dynamic_obstacles=4,
                  blocked_route_retry_limit=40,
-                 geofence_warning_margin=0.30,
-                 geofence_recovery_margin=0.45):
+                 geofence_warning_margin=0.45,
+                 geofence_recovery_margin=0.50):
         self.altitude = float(altitude)
         self.altitude_tolerance = float(altitude_tolerance)
         self.trigger_range = float(trigger_range)
