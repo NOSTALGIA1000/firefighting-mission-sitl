@@ -1,0 +1,4 @@
+RESULT run=1 hazard=40.1 rescue=25.9 home=40.3 total=106.2 closest=0.489 outcome=complete within_180=yes gzserver_alive=2 blind_land=0 lockdown=0 no_offboard=0 ev_resets=0 ulog=/home/ss/.ros/log/2026-09-01/10_16_32.ulg
+RESULT run=2 outcome=driver_failed gzserver_alive=2 blind_land=1 lockdown=0 no_offboard=2 ev_resets=1 ulog=/home/ss/.ros/log/2026-09-01/10_24_31.ulg
+RESULT run=3 hazard=42.7 rescue=28.1 home=timeout closest=0.592 outcome=stuck_at_home stuck=HOLD_UNSAFE/geofence_recovery@3.10,0.06,0.29 gzserver_alive=2 blind_land=2 lockdown=0 no_offboard=0 ev_resets=13 ulog=/home/ss/.ros/log/2026-09-01/10_29_41.ulg
+RESULT run=4 outcome=driver_failed gzserver_alive=2 blind_land=0 lockdown=0 no_offboard=0 ev_resets=1 ulog=/home/ss/.ros/log/2026-09-01/10_37_59.ulg
