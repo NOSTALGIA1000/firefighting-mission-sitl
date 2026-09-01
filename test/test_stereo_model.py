@@ -58,13 +58,20 @@ class StereoModelTest(unittest.TestCase):
 
         self.assertLess(float(root.find('.//link/inertial/mass').text), 0.001)
 
-    def test_sitl_map_frame_disables_gps_random_walk(self):
+    def test_sitl_gps_reports_the_noise_ekf2_expects(self):
+        """A noiseless GPS is not an input EKF2 is built to fuse.
+
+        With gpsNoise 0 and GPS aiding selected, the horizontal estimate
+        diverged and reset repeatedly: MAVROS reported (-43, -34), then
+        (0, 0), then (-22, -11) with the aircraft stationary. The vision
+        profile does not fuse GPS at all, so enabling noise costs it nothing.
+        """
         root = ET.parse(os.path.join(
             PROJECT_ROOT, 'models', 'fire_iris', 'fire_iris.sdf')).getroot()
         gps = root.find(".//plugin[@name='gps_plugin']")
 
         self.assertIsNotNone(gps)
-        self.assertEqual('0', gps.find('gpsNoise').text)
+        self.assertNotEqual('0', gps.find('gpsNoise').text)
 
     def test_px4_rotor_and_imu_joint_axes_use_parent_model_frame(self):
         """Joint axes must stay in the parent model frame, as PX4 ships them.
