@@ -1,0 +1,10 @@
+RESULT run=1 outcome=driver_failed gzserver_alive=0 blind_land=0 lockdown=0 no_offboard=0 ev_resets=0 ulog=/home/ss/.ros/log/2026-09-01/06_52_08.ulg
+RESULT run=2 outcome=driver_failed gzserver_alive=0 blind_land=0 lockdown=0 no_offboard=0 ev_resets=0 ulog=/home/ss/.ros/log/2026-09-01/06_59_42.ulg
+RESULT run=3 hazard=timeout closest=0.559 outcome=stuck_at_hazard stuck=HOLD_UNSAFE/invalid_pose@0.00,0.00,0.00 gzserver_alive=2 blind_land=0 lockdown=0 no_offboard=1 ev_resets=0 ulog=/home/ss/.ros/log/2026-09-01/07_07_15.ulg
+RESULT run=4 outcome=driver_failed gzserver_alive=0 blind_land=0 lockdown=0 no_offboard=0 ev_resets=0 ulog=/home/ss/.ros/log/2026-09-01/07_10_15.ulg
+RESULT run=5 hazard=41.4 rescue=37.5 home=timeout closest=0.158 outcome=stuck_at_home stuck=HOLD_UNSAFE/invalid_pose@0.00,0.00,0.00 gzserver_alive=2 blind_land=4 lockdown=2 no_offboard=2 ev_resets=5 ulog=/home/ss/.ros/log/2026-09-01/07_17_48.ulg
+RESULT run=6 hazard=39.9 rescue=21.5 home=timeout closest=0.600 outcome=stuck_at_home stuck=HOLD_UNSAFE/invalid_pose@0.00,0.00,0.00 gzserver_alive=2 blind_land=1 lockdown=0 no_offboard=2 ev_resets=1 ulog=/home/ss/.ros/log/2026-09-01/07_22_22.ulg
+RESULT run=7 hazard=39.9 rescue=65.9 home=timeout closest=0.341 outcome=stuck_at_home stuck=HOLD_UNSAFE/geofence_recovery@0.22,0.47,0.23 gzserver_alive=2 blind_land=0 lockdown=0 no_offboard=0 ev_resets=0 ulog=/home/ss/.ros/log/2026-09-01/07_26_31.ulg
+RESULT run=8 hazard=timeout closest=0.578 outcome=stuck_at_hazard stuck=HOLD_UNSAFE/invalid_pose@0.00,0.00,0.00 gzserver_alive=2 blind_land=0 lockdown=0 no_offboard=1 ev_resets=0 ulog=/home/ss/.ros/log/2026-09-01/07_31_24.ulg
+RESULT run=9 hazard=40.9 rescue=timeout closest=0.686 outcome=stuck_at_rescue stuck=HOLD_UNSAFE/altitude_out_of_band@0.84,0.16,0.37 gzserver_alive=2 blind_land=5 lockdown=0 no_offboard=0 ev_resets=11 ulog=/home/ss/.ros/log/2026-09-01/07_34_18.ulg
+RESULT run=10 hazard=timeout closest=0.513 outcome=stuck_at_hazard stuck=HOLD_UNSAFE/geofence_recovery@3.26,-0.03,0.25 gzserver_alive=2 blind_land=4 lockdown=0 no_offboard=0 ev_resets=9 ulog=/home/ss/.ros/log/2026-09-01/07_37_57.ulg
