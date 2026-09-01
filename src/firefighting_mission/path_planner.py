@@ -16,6 +16,7 @@ PlanCommand = namedtuple(
 
 class VisualPlannerConfig(object):
     def __init__(self, altitude=1.20, altitude_tolerance=0.08,
+                 altitude_hold_grace=200, altitude_abort_tolerance=0.45,
                  trigger_range=0.85, minimum_corridor=0.90,
                  aircraft_radius=0.20, external_clearance=0.25,
                  pass_distance=0.80, waypoint_tolerance=0.12,
@@ -34,6 +35,9 @@ class VisualPlannerConfig(object):
                  geofence_recovery_margin=0.65):
         self.altitude = float(altitude)
         self.altitude_tolerance = float(altitude_tolerance)
+        self.altitude_hold_grace = int(altitude_hold_grace)
+        self.altitude_abort_tolerance = float(
+            altitude_abort_tolerance)
         self.trigger_range = float(trigger_range)
         self.minimum_corridor = float(minimum_corridor)
         self.aircraft_radius = float(aircraft_radius)
@@ -194,6 +198,7 @@ class VisualPathPlanner(object):
         self.global_observation_count = 0
         self.hold_reason = ''
         self.blocked_route_retries = 0
+        self.altitude_hold_ticks = 0
 
     @staticmethod
     def _dynamic_route(start, goal, circles):
@@ -423,6 +428,27 @@ class VisualPathPlanner(object):
                 max(FIELD_BOUNDS[2] + recovery,
                     min(FIELD_BOUNDS[3] - recovery, pose[1])))
 
+    def _altitude_hold_still_worth_it(self, pose):
+        """Return whether to keep holding for the altitude band.
+
+        Holding forever loses the run. Campaign runs ended parked at
+        1.00-1.05 m with the setpoint at 1.25 and every fault counter at
+        zero: PX4 would not close the last 0.2 m and the planner held until
+        the leg timed out. The obstacles are 2 m tall, so flying the route
+        0.2 m low is safe and finishing beats freezing.
+
+        The grace is in planner ticks, 20 Hz in the node, so 200 is ten
+        seconds - long enough to cover climbing through the band on takeoff
+        and any real transient, far short of the 100 s the stuck runs sat
+        there. A real altitude loss still holds: the give-up only applies
+        inside altitude_abort_tolerance.
+        """
+        self.altitude_hold_ticks += 1
+        if self.altitude_hold_ticks <= self.config.altitude_hold_grace:
+            return True
+        return (abs(pose[2] - self.config.altitude) >
+                self.config.altitude_abort_tolerance)
+
     def _inside_warning_box(self, pose):
         """Return whether the aircraft is back inside the box that warns.
 
@@ -614,7 +640,10 @@ class VisualPathPlanner(object):
         if geofence_target is not None:
             return self._geofence_hold(pose, geofence_target)
         if abs(pose[2] - self.config.altitude) > self.config.altitude_tolerance:
-            return self._hold(pose, 'altitude_out_of_band')
+            if self._altitude_hold_still_worth_it(pose):
+                return self._hold(pose, 'altitude_out_of_band')
+        else:
+            self.altitude_hold_ticks = 0
         if self.interrupted_state is not None:
             self.state = self.interrupted_state
             self.interrupted_state = None

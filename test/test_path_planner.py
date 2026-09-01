@@ -793,6 +793,37 @@ class VisualPathPlannerTest(unittest.TestCase):
         self.assertEqual('geofence_recovery', still_recovering.reason)
         self.assertNotEqual('geofence_recovery', recentred.reason)
 
+    def test_altitude_hold_gives_up_and_keeps_flying(self):
+        """Freezing on altitude for good loses the run outright.
+
+        Campaign runs ended parked at 1.00-1.05 m with the setpoint at 1.25
+        and every fault counter at zero: PX4 would not climb the last
+        0.2 m, and the planner held until the leg timed out. Flying the
+        route 0.2 m low is safe - the obstacles are 2 m tall - so after
+        altitude_hold_grace the planner carries on.
+        """
+        planner = planner_with_goal()
+        low = (0.0, 0.0, 1.05, 0.0)
+
+        for index in range(int(planner.config.altitude_hold_grace)):
+            held = planner.update(low, (), True, 1.0 + index)
+        resumed = planner.update(low, (), True, 99.0)
+
+        self.assertEqual('HOLD_UNSAFE', held.state)
+        self.assertEqual('altitude_out_of_band', held.reason)
+        self.assertEqual('FOLLOW_ROUTE', resumed.state)
+
+    def test_altitude_far_outside_the_band_still_holds(self):
+        """The give-up only covers a near miss, not a real altitude loss."""
+        planner = planner_with_goal()
+        on_the_ground = (0.0, 0.0, 0.30, 0.0)
+
+        for index in range(int(planner.config.altitude_hold_grace) + 5):
+            command = planner.update(on_the_ground, (), True, 1.0 + index)
+
+        self.assertEqual('HOLD_UNSAFE', command.state)
+        self.assertEqual('altitude_out_of_band', command.reason)
+
     def test_altitude_error_holds_xy_and_recovers_12(self):
         command = planner_with_goal().update(
             (0.3, -0.2, 1.36, 0.0), (), True, 2.0)
