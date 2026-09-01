@@ -2,6 +2,7 @@ from __future__ import division, print_function
 
 import math
 import os
+import re
 import sys
 import unittest
 
@@ -17,6 +18,22 @@ from firefighting_mission.stereo_obstacles import ObstacleClusterData
 
 POSE = (0.0, 0.0, 1.2, 0.0)
 OBSTACLE = ObstacleClusterData(0.80, 0.0, 0.75, 0.10, -0.10, 1.0)
+
+
+def node_geofence_margin(name):
+    """Read a geofence default out of the ROS node, which is what flies.
+
+    The node overrides VisualPlannerConfig, so asserting the library default
+    would leave the shipped value unchecked - and the shipped value is the
+    one that put five of the six mission points on the release boundary.
+    """
+    with open(os.path.join(PROJECT_ROOT, 'scripts', 'path_planner.py'),
+              'r') as handle:
+        source = handle.read()
+    match = re.search(r"'~%s',\s*([0-9.]+)\)" % name, source)
+    if match is None:
+        raise AssertionError('%s is not set in the node' % name)
+    return float(match.group(1))
 
 
 def straight_route(start, goal):
@@ -81,6 +98,35 @@ class VisualPathPlannerTest(unittest.TestCase):
         self.assertAlmostEqual(11.0, converted[0], places=6)
         self.assertAlmostEqual(20.0, converted[1], places=6)
         self.assertAlmostEqual(math.pi / 2.0, converted[3], places=6)
+
+    def test_every_point_the_rules_require_sits_inside_the_recovery_box(self):
+        """The geofence must contain the places the rules make it hover.
+
+        Both task zones and the takeoff pad sit 0.65 m from the safety net,
+        so a recovery margin of 0.65 puts five of the six mission points
+        exactly on the release boundary: the hold then never releases and the
+        leg times out.  That is what wedged runs at the hazard zone, the
+        rescue zone and on the way home.
+        """
+        from firefighting_mission.world_generator import (
+            FIELD_BOUNDS, HAZARD_POSES, PERSON_POSES)
+        margin = node_geofence_margin('geofence_recovery_margin')
+        box = (FIELD_BOUNDS[0] + margin, FIELD_BOUNDS[1] - margin,
+               FIELD_BOUNDS[2] + margin, FIELD_BOUNDS[3] - margin)
+        points = [('takeoff', (0.0, 0.0))]
+        points += [('hazard%d' % key, HAZARD_POSES[key]) for key in (1, 2)]
+        points += [('rescue%d' % key, PERSON_POSES[key]) for key in (1, 2, 3)]
+
+        for name, (x_value, y_value) in points:
+            slack = min(x_value - box[0], box[1] - x_value,
+                        y_value - box[2], box[3] - y_value)
+            self.assertGreaterEqual(slack, 0.15, '%s has %.3f m of slack'
+                                    % (name, slack))
+
+    def test_geofence_warning_triggers_before_the_recovery_box(self):
+        """Warn shallower than the release, or the hold has no hysteresis."""
+        self.assertLess(node_geofence_margin('geofence_warning_margin'),
+                        node_geofence_margin('geofence_recovery_margin'))
 
     def test_geofence_hold_releases_once_back_inside_the_field(self):
         """Requiring 5 cm of a recovery point wedged the run.
@@ -707,13 +753,15 @@ class VisualPathPlannerTest(unittest.TestCase):
             config=VisualPlannerConfig(known_static_tolerance=-1.0),
             route_provider=straight_route)
         planner.set_goal((2.0, 0.0, 1.2), POSE)
-        near_west_net = (-0.31, -1.50, 1.20, -1.2)
+        # West net at x = -0.65, warning margin 0.30, so the box starts at
+        # x = -0.35 and recovery pulls back to the 0.45 margin at x = -0.20.
+        near_west_net = (-0.40, -1.50, 1.20, -1.2)
 
         command = planner.update(near_west_net, (), True, 2.0)
 
         self.assertEqual('HOLD_UNSAFE', command.state)
         self.assertEqual('geofence_recovery', command.reason)
-        self.assertAlmostEqual(-0.10, command.target[0], places=6)
+        self.assertAlmostEqual(-0.20, command.target[0], places=6)
         self.assertAlmostEqual(-1.50, command.target[1], places=6)
         self.assertAlmostEqual(-1.2, command.target_yaw, places=6)
 
@@ -732,12 +780,13 @@ class VisualPathPlannerTest(unittest.TestCase):
             config=VisualPlannerConfig(known_static_tolerance=-1.0),
             route_provider=straight_route)
         planner.set_goal((2.0, 0.0, 1.2), POSE)
-        planner.update((-0.31, -1.50, 1.20, -1.2), (), True, 2.0)
+        planner.update((-0.40, -1.50, 1.20, -1.2), (), True, 2.0)
 
+        # Back inside the warning box but not yet inside the recovery box.
         still_recovering = planner.update(
-            (-0.20, -1.50, 1.20, -1.2), (), True, 2.1)
+            (-0.30, -1.50, 1.20, -1.2), (), True, 2.1)
         recentred = planner.update(
-            (-0.08, -1.50, 1.20, -1.2), (), True, 2.2)
+            (-0.15, -1.50, 1.20, -1.2), (), True, 2.2)
 
         self.assertEqual('geofence_recovery', still_recovering.reason)
         self.assertNotEqual('geofence_recovery', recentred.reason)

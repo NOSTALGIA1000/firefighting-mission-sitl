@@ -30,10 +30,13 @@ class PathPlannerNode(object):
             altitude_tolerance=rospy.get_param('~altitude_tolerance', 0.15),
             yaw_alignment_tolerance=rospy.get_param(
                 '~yaw_alignment_tolerance', 0.20),
+            # The rules put the takeoff pad and both task zones 0.65 m from
+            # the safety net and make the aircraft hover on them, so the
+            # recovery box has to sit inside that or the hold never releases.
             geofence_warning_margin=rospy.get_param(
-                '~geofence_warning_margin', 0.45),
+                '~geofence_warning_margin', 0.30),
             geofence_recovery_margin=rospy.get_param(
-                '~geofence_recovery_margin', 0.65),
+                '~geofence_recovery_margin', 0.45),
             minimum_corridor=rospy.get_param('~minimum_corridor', 0.90),
             trigger_range=rospy.get_param('~trigger_range', 0.85),
             sensor_forward_offset=rospy.get_param(

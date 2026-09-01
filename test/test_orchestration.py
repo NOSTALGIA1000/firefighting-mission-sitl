@@ -105,8 +105,10 @@ class OrchestrationTest(unittest.TestCase):
         self.assertIn("'~maximum_setpoint_lead', 0.25", planner_node)
         self.assertIn("'~maximum_yaw_rate', 0.35", planner_node)
         self.assertIn("'~yaw_alignment_tolerance', 0.20", planner_node)
-        self.assertIn("'~geofence_warning_margin', 0.45", planner_node)
-        self.assertIn("'~geofence_recovery_margin', 0.65", planner_node)
+        # 0.65 put the takeoff pad and both task zones exactly on the
+        # recovery boundary, so the hold could never release there.
+        self.assertIn("'~geofence_warning_margin', 0.30", planner_node)
+        self.assertIn("'~geofence_recovery_margin', 0.45", planner_node)
         self.assertIn("'~altitude_tolerance', 0.15", planner_node)
         self.assertIn("'HOLD_UNSAFE', 'REACHED'", planner_node)
 
