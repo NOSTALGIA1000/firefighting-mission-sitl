@@ -110,7 +110,9 @@ class VisualPathPlannerTest(unittest.TestCase):
         """
         from firefighting_mission.world_generator import (
             FIELD_BOUNDS, HAZARD_POSES, PERSON_POSES)
-        margin = node_geofence_margin('geofence_recovery_margin')
+        # The release uses the warning box, so that is the one that has
+        # to contain every point the rules make the aircraft occupy.
+        margin = node_geofence_margin('geofence_warning_margin')
         box = (FIELD_BOUNDS[0] + margin, FIELD_BOUNDS[1] - margin,
                FIELD_BOUNDS[2] + margin, FIELD_BOUNDS[3] - margin)
         points = [('takeoff', (0.0, 0.0))]
@@ -754,14 +756,14 @@ class VisualPathPlannerTest(unittest.TestCase):
             route_provider=straight_route)
         planner.set_goal((2.0, 0.0, 1.2), POSE)
         # West net at x = -0.65, warning margin 0.45, so the box starts at
-        # x = -0.20 and recovery pulls back to the 0.50 margin at x = -0.15.
+        # x = -0.20 and the hold aims at the deeper 0.65 margin, x = 0.00.
         near_west_net = (-0.30, -1.50, 1.20, -1.2)
 
         command = planner.update(near_west_net, (), True, 2.0)
 
         self.assertEqual('HOLD_UNSAFE', command.state)
         self.assertEqual('geofence_recovery', command.reason)
-        self.assertAlmostEqual(-0.15, command.target[0], places=6)
+        self.assertAlmostEqual(0.00, command.target[0], places=6)
         self.assertAlmostEqual(-1.50, command.target[1], places=6)
         self.assertAlmostEqual(-1.2, command.target_yaw, places=6)
 
@@ -782,9 +784,9 @@ class VisualPathPlannerTest(unittest.TestCase):
         planner.set_goal((2.0, 0.0, 1.2), POSE)
         planner.update((-0.30, -1.50, 1.20, -1.2), (), True, 2.0)
 
-        # Back inside the warning box but not yet inside the recovery box.
+        # Still outside the warning box, then back inside it.
         still_recovering = planner.update(
-            (-0.18, -1.50, 1.20, -1.2), (), True, 2.1)
+            (-0.25, -1.50, 1.20, -1.2), (), True, 2.1)
         recentred = planner.update(
             (-0.10, -1.50, 1.20, -1.2), (), True, 2.2)
 

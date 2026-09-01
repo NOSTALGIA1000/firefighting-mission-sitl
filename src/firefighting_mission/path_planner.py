@@ -31,7 +31,7 @@ class VisualPlannerConfig(object):
                  maximum_dynamic_obstacles=4,
                  blocked_route_retry_limit=40,
                  geofence_warning_margin=0.45,
-                 geofence_recovery_margin=0.50):
+                 geofence_recovery_margin=0.65):
         self.altitude = float(altitude)
         self.altitude_tolerance = float(altitude_tolerance)
         self.trigger_range = float(trigger_range)
@@ -423,20 +423,23 @@ class VisualPathPlanner(object):
                 max(FIELD_BOUNDS[2] + recovery,
                     min(FIELD_BOUNDS[3] - recovery, pose[1])))
 
-    def _inside_recovery_box(self, pose):
-        """Return whether the aircraft is back inside the deeper safe box.
+    def _inside_warning_box(self, pose):
+        """Return whether the aircraft is back inside the box that warns.
 
-        Releasing on the recovery margin rather than on proximity to a single
-        point gives the hysteresis the two margins were meant to provide, and
-        cannot wedge: the old release needed the aircraft within
-        a fixed tolerance of one point, and any steady-state offset
-        held the run there for good.
+        The two margins do different jobs and must not share a value.  The
+        recovery margin sets how deep the hold pulls the aircraft, and deep
+        is protective.  The release has to be satisfiable where the rules
+        make the aircraft hover: the task zones and the pad sit 0.65 m from
+        the net, so releasing on the recovery margin left five of the six
+        mission points exactly on the boundary and the hold never let go.
+        Releasing on the warning margin leaves every one of them 0.20 m
+        inside, while the hold still aims at the deeper point.
         """
-        recovery = self.config.geofence_recovery_margin
-        return (FIELD_BOUNDS[0] + recovery <= pose[0] <=
-                FIELD_BOUNDS[1] - recovery and
-                FIELD_BOUNDS[2] + recovery <= pose[1] <=
-                FIELD_BOUNDS[3] - recovery)
+        warning = self.config.geofence_warning_margin
+        return (FIELD_BOUNDS[0] + warning <= pose[0] <=
+                FIELD_BOUNDS[1] - warning and
+                FIELD_BOUNDS[2] + warning <= pose[1] <=
+                FIELD_BOUNDS[3] - warning)
 
     def _geofence_hold(self, pose, target):
         if self.interrupted_state is None and self.state != 'HOLD_UNSAFE':
@@ -604,7 +607,7 @@ class VisualPathPlanner(object):
             return self._hold(pose, 'perception_not_ready')
         if (self.hold_reason == 'geofence_recovery' and
                 self.hold_target is not None):
-            if not self._inside_recovery_box(pose):
+            if not self._inside_warning_box(pose):
                 return self._geofence_hold(pose, self.hold_target)
             self._clear_hold()
         geofence_target = self._geofence_recovery_target(pose)
