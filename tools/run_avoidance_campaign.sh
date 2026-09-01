@@ -19,7 +19,10 @@ for index in $(seq 1 "$RUNS"); do
   export ROS_MASTER_URI=http://127.0.0.1:11311
   export ROS_IP=127.0.0.1
   export ROS_HOSTNAME=127.0.0.1
-  timeout 400 python -u $(dirname "$0")/fly_avoidance_chain.py "$index" > "$out" 2>&1
+  # Worst case is the 120 s hover wait plus three 100 s legs, so 400 killed
+  # the driver before it printed anything and the run scored driver_failed.
+  # That ate two of ten runs in one campaign.
+  timeout 600 python -u $(dirname "$0")/fly_avoidance_chain.py "$index" > "$out" 2>&1
 
   line=$(grep '^RESULT' "$out" | tail -1)
   [ -z "$line" ] && line="RESULT run=$index outcome=driver_failed"
