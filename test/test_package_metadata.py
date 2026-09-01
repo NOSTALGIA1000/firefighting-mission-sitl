@@ -123,6 +123,10 @@ class PackageMetadataTest(unittest.TestCase):
         self.assertIn('EKF2_MAGBIAS_Z 0', px4_post)
         self.assertIn('EKF2_EV_NOISE_MD 1', px4_post)
         self.assertIn('EKF2_EVP_NOISE 0.03', px4_post)
+        # Loosening this to the PX4 default of 0.1 was tried on the theory
+        # that over-trusted velocity was integrating into position drift.
+        # It measured worse: 0 of 10 runs completed against 2 of 10, and the
+        # hazard leg was reached 3 times instead of most runs.
         self.assertIn('EKF2_EVV_NOISE 0.03', px4_post)
         # Widening this to 30 was tried and measured worse: with the
         # estimate already diverging it feeds huge innovations straight into
