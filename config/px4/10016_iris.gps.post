@@ -1,0 +1,39 @@
+#!/bin/sh
+# EXPERIMENTAL AND NOT WORKING YET - do not select this for a real run.
+#
+# SITL estimation on PX4's own simulated sensors, meant to validate the
+# mission without the external-vision bridge in the loop.
+#
+# Status 2026-09-01: the aircraft arms and reaches OFFBOARD, but the EKF's
+# horizontal position diverges and resets repeatedly - MAVROS local position
+# jumped to (-43, -34), back to (0, 0), then to (-22, -11) while the aircraft
+# sat still. fire_iris.sdf disables GPS noise entirely (gpsNoise 0), which is
+# the first thing to question: a zero-noise GPS is not what EKF2 expects.
+#
+# fire_iris.sdf sets gpsNoise to 0, so simulated GPS is exact and easily fine
+# for the 0.30 m clearances this field demands. The external-vision path is
+# what the real aircraft will replace with stereo VIO anyway, so proving the
+# avoidance logic here separates "does the mission work" from "is the vision
+# bridge healthy".
+#
+# Select with FIRE_ESTIMATOR=gps; the default stays the vision configuration.
+#
+# PX4 keeps parameters in ~/.ros/eeprom, so every value the vision profile
+# changes has to be set back explicitly. Leaving EKF2_MAG_TYPE at 5 was
+# enough on its own to block arming: with the magnetometer off and no vision
+# yaw, heading is unobservable and estimator_status never reports a valid
+# attitude, so the preflight gate held at attitude_invalid forever.
+param set EKF2_MAG_TYPE 0
+param set EKF2_MAG_ACCLIM 0.5
+param set EKF2_HDG_GATE 2.6
+param set EKF2_TAU_POS 0.25
+param set EKF2_EV_DELAY 175
+# GPS height put the local origin 2454 m off and MAVROS reported
+# z = -2454 while the aircraft sat on the ground. Baro references
+# itself to the origin at boot, which is what this field needs.
+param set EKF2_HGT_MODE 0
+param set EKF2_AID_MASK 1
+param set MC_YAWRATE_MAX 45
+param set MC_YAW_P 2.8
+param set MC_YAWRATE_P 0.20
+param set MC_YAWRATE_I 0.1

@@ -91,6 +91,23 @@ class PackageMetadataTest(unittest.TestCase):
         self.assertIn('config', cmake)
         self.assertIn('config/px4/10016_iris.post', start_sitl)
         self.assertIn('cmp -s', start_sitl)
+        # An alternative estimator profile exists so the mission can be
+        # proved without the external-vision bridge, which the real aircraft
+        # replaces with stereo VIO anyway. It does not work yet; the file
+        # says so at the top and the default stays on vision.
+        self.assertIn('config/px4/10016_iris.gps.post', start_sitl)
+        self.assertIn('FIRE_ESTIMATOR', start_sitl)
+        gps_post = self._read('config/px4/10016_iris.gps.post')
+        self.assertIn('EKF2_AID_MASK 1', gps_post)
+        self.assertIn('EKF2_HGT_MODE 0', gps_post)
+        self.assertIn('MC_YAW_P 2.8', gps_post)
+        # PX4 keeps parameters in eeprom, so the GPS profile has to undo
+        # every value the vision profile sets. EKF2_MAG_TYPE 5 surviving was
+        # enough to block arming on attitude_invalid: no magnetometer and no
+        # vision yaw leaves heading unobservable.
+        self.assertIn('EKF2_MAG_TYPE 0', gps_post)
+        self.assertIn('EKF2_HDG_GATE 2.6', gps_post)
+        self.assertIn('EKF2_TAU_POS 0.25', gps_post)
         self.assertIn('EKF2_AID_MASK 280', px4_post)
         self.assertIn('EKF2_MAG_TYPE 5', px4_post)
         self.assertIn('EKF2_TAU_POS 0.10', px4_post)

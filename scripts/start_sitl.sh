@@ -13,7 +13,14 @@ case "$sdf" in __*:=*) sdf="$default_sdf" ;; esac
 case "$spawn_z" in __*:=*) spawn_z="0.2" ;; esac
 case "$spawn_yaw" in __*:=*) spawn_yaw="-1.5707963" ;; esac
 px4_root="${PX4_FIRMWARE_DIR:-/home/ss/PX4_Firmware}"
-vision_post_source="$package_root/config/px4/10016_iris.post"
+# FIRE_ESTIMATOR selects which PX4 estimator configuration to install.
+# "vision" is the external-vision bridge the real aircraft will replace with
+# stereo VIO; "gps" runs on PX4's own simulated sensors, which is how the
+# mission is validated without the bridge in the loop.
+case "${FIRE_ESTIMATOR:-vision}" in
+  gps) vision_post_source="$package_root/config/px4/10016_iris.gps.post" ;;
+  *)   vision_post_source="$package_root/config/px4/10016_iris.post" ;;
+esac
 vision_post_target="$px4_root/ROMFS/px4fmu_common/init.d-posix/10016_iris.post"
 if [[ ! -e "$vision_post_target" ]]; then
   cp "$vision_post_source" "$vision_post_target"
