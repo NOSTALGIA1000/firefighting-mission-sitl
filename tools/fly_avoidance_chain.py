@@ -52,7 +52,12 @@ def wait_for_hover():
 
 
 def fly_leg(publisher, goal):
-    """Return (seconds or None, closest cylinder approach, last reason)."""
+    """Return (seconds or None, closest cylinder approach, why it stopped).
+
+    The stop reason is sampled when the leg gives up, not accumulated over
+    the leg: a transient reason seen early says nothing about what the
+    aircraft was actually stuck on.
+    """
     target = PoseStamped()
     target.header.frame_id = 'map'
     target.pose.position.x, target.pose.position.y = goal
@@ -61,7 +66,6 @@ def fly_leg(publisher, goal):
 
     started = rospy.Time.now().to_sec()
     closest = float('inf')
-    reason = ''
     while rospy.Time.now().to_sec() - started < LEG_TIMEOUT:
         target.header.stamp = rospy.Time.now()
         publisher.publish(target)
@@ -73,10 +77,16 @@ def fly_leg(publisher, goal):
         for cylinder in CYLINDERS:
             closest = min(closest, math.hypot(point.x - cylinder[0],
                                               point.y - cylinder[1]))
-        reason = status.reason or reason
         if status.state == 'REACHED':
-            return rospy.Time.now().to_sec() - started, closest, reason
-    return None, closest, reason
+            return rospy.Time.now().to_sec() - started, closest, ''
+    status = state.get('av')
+    point = drone_position()
+    stuck = 'no_status'
+    if status is not None:
+        stuck = '%s/%s' % (status.state, status.reason or 'none')
+        if point is not None:
+            stuck += '@%.2f,%.2f,%.2f' % (point.x, point.y, point.z)
+    return None, closest, stuck
 
 
 def main(label):
@@ -102,7 +112,7 @@ def main(label):
             fields.append('%s=timeout' % name)
             fields.append('closest=%.3f' % worst)
             fields.append('outcome=stuck_at_%s' % name)
-            fields.append('reason=%s' % (reason or 'none'))
+            fields.append('stuck=%s' % (reason or 'none'))
             print('RESULT %s' % ' '.join(fields))
             return 1
         total += elapsed
